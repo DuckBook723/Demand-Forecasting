@@ -1,0 +1,22 @@
+# configs/model_config.yaml
+model:
+  name: "VMD-CAT-BiLSTM"
+  n_imf: 4              # VMD分解模态数
+  n_external: 3         # DAE编码后外部特征维度
+  seq_len: 12           # 输入序列长度（用过去12个时段预测下一时段）
+  tcn_hidden: 64        # TCN隐藏维度
+  tcn_output: 32        # TCN输出维度
+  lstm_hidden: 64       # BiLSTM隐藏维度（单向）
+  lstm_layers: 2        # BiLSTM层数
+
+training:
+  epochs: 200
+  batch_size: 32
+  learning_rate: 0.001
+  weight_decay: 1.0e-5  # L2正则化
+  grad_clip: 1.0        # 梯度裁剪阈值
+
+data:
+  train_path: "data/processed/train_encoded.csv"
+  val_path: "data/processed/val_encoded.csv"
+  test_path: "data/processed/test_encoded.csv"
