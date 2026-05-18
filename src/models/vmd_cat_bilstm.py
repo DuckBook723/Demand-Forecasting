@@ -16,11 +16,20 @@
 """
 
 # ======================== 0. 引入包 =======================
+import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from src.models.ca_tcn import CATCN
 from src.models.fusion import GateFusion, PredictionHead
 from src.models.ta_bilstm import TABiLSTM
+from src.features.dae_encoder import DenoisingAE
+from configs.config import (
+    DAE_HIDDEN_DIM,                 # DAE隐藏层维度
+    NOISE_STD,                      # 噪声标准差
+    DAE_MODEL_FILE_PATH,            # DAE模型保存路径
+    DROPOUT,                        # dropout 概率
+)
 
 # ======================== 1. 独立子网络 =======================
 class SubNet(nn.Module):
@@ -48,7 +57,8 @@ class SubNet(nn.Module):
             tcn_output: int = 32,
             lstm_hidden: int = 64,
             lstm_layers: int = 2,
-            unified_dim: int = 128
+            unified_dim: int = 128,
+            dropout: float = 0.2
     ):
         """
         初始化SubNet子网络
@@ -60,6 +70,7 @@ class SubNet(nn.Module):
             lstm_hidden (int, optional): LSTM隐藏层维度，默认为64
             lstm_layers (int, optional): LSTM层数，默认为2
             unified_dim (int, optional): 融合后的统一特征维度，默认为128
+            dropout (float, optional): Dropout比率，默认为0.2
         """
         super(SubNet, self).__init__()
 
@@ -67,6 +78,7 @@ class SubNet(nn.Module):
             input_dim=input_dim,
             hidden_dim=tcn_hidden,
             output_dim=tcn_output,
+            dropout=dropout,
         )
 
         self.local_pool = nn.AdaptiveAvgPool1d(1)
@@ -75,6 +87,7 @@ class SubNet(nn.Module):
             input_dim=tcn_output,
             hidden_dim=lstm_hidden,
             num_layers=lstm_layers,
+            dropout=dropout,
         )
 
         self.fusion = GateFusion(
@@ -86,7 +99,7 @@ class SubNet(nn.Module):
         self.prediction_head = PredictionHead(
             input_dim=unified_dim,
             hidden_dims=[64, 32],
-            dropout=0.2,
+            dropout=dropout,
         )
 
     def forward(self, x):
@@ -121,83 +134,188 @@ class VMDCATBiLSTM(nn.Module):
     VMD-CAT-BiLSTM主预测模型
 
     该模型基于VMD(变分模态分解)方法，将原始时间序列分解为多个IMF(本征模态函数)分量，
-    为每个IMF分量独立分配一个SubNet子网络进行并行预测，最后将所有子网络的预测结果
+    为每个IMF分量分配SubNet子网络进行预测，最后将所有子网络的预测结果
     累加得到最终的需求预测值。同时收集各子网络的注意力权重，用于模型可解释性分析。
+
+    支持"参数共享"模式：当share_subnet=True时，所有IMF分量共用同一个SubNet，
+    参数量降为原来的1/n_imf，且每个参数获得n_imf倍的梯度更新，
+    有效缓解小样本下的过拟合问题。
+
+    支持"端到端DAE训练"模式：当use_dae=True时，DAE编码器作为模型组件，
+    在forward中将原始n_external维特征编码为dae_output_dim维，然后送入SubNet处理。
+    DAE权重根据预测损失+重构损失联合优化，使编码特征对预测任务更有利。
 
     模型架构:
         输入IMFs → [SubNet_1, SubNet_2, ..., SubNet_n] → 预测值累加 → 输出
+        或（share_subnet=True）: 输入IMFs → [SharedSubNet] × n → 预测值累加 → 输出
+        或（use_dae=True）: 输入IMFs + 原始特征 → DAE编码 → 编码特征 → SubNet → 输出
 
     Attributes:
         n_imf (int): IMF分量的数量，即VMD分解后的模态数
-        n_external (int): 外部特征的维度数量
-        sub_nets (nn.ModuleList): 包含n_imf个SubNet子网络的模块列表
+        n_external (int): 外部特征的维度数量（原始特征维度）
+        use_dae (bool): 是否使用端到端DAE编码器
+        dae (DenoisingAE): DAE编码器+解码器（仅use_dae=True时存在）
+        sub_nets (nn.ModuleList): share_subnet=False时，包含n_imf个SubNet
+        shared_subnet (SubNet): share_subnet=True时，单个共享SubNet
     """
-
     def __init__(
             self,
             n_imf: int,
             n_external: int,
-            tcn_hidden: int = 64,
-            tcn_output: int = 32,
-            lstm_hidden: int = 64,
+            tcn_hidden: int = 32,
+            tcn_output: int = 16,
+            lstm_hidden: int = 32,
             lstm_layers: int = 2,
-            unified_dim: int = 128
+            unified_dim: int = 64,
+            dropout: float = 0.2,
+            share_subnet: bool = True,
+            use_dae: bool = False,
+            dae_pretrained_path: str = None,
     ):
         """
         初始化VMDCATBiLSTM主模型
 
-        为每个IMF分量创建独立的SubNet子网络，所有子网络共享相同的网络结构和超参数配置。
-
         Args:
-            n_imf (int): IMF分量数量，决定创建多少个子网络
-            n_external (int): 外部特征的数量，如温度、湿度、节假日标记等
-            tcn_hidden (int, optional): TCN隐藏层维度，默认为64
-            tcn_output (int, optional): TCN输出维度，默认为32
-            lstm_hidden (int, optional): BiLSTM隐藏层维度，默认为64
-            lstm_layers (int, optional): BiLSTM层数，默认为2
-            unified_dim (int, optional): 融合特征的统一维度，默认为128
+            n_imf (int): IMF分量数量
+            n_external (int): 外部特征数量
+            tcn_hidden (int): TCN隐藏层维度
+            tcn_output (int): TCN输出维度
+            lstm_hidden (int): BiLSTM隐藏层维度
+            lstm_layers (int): BiLSTM层数
+            unified_dim (int): 融合特征统一维度
+            dropout (float): Dropout比率
+            share_subnet (bool): 是否共享SubNet参数，True时所有IMF共用同一SubNet
+            use_dae (bool): 是否使用端到端DAE编码器。True时，模型内部将n_external维原始特征编码为
+                            dae_output_dim维，SubNet输入维度=1+dae_output_dim
+            dae_pretrained_path (str): DAE预训练权重路径，None则使用config默认路径
         """
         super(VMDCATBiLSTM, self).__init__()
 
         self.n_imf = n_imf
         self.n_external = n_external
+        self.share_subnet = share_subnet
+        self.use_dae = use_dae
 
-        input_dim = 1 + n_external
+        # ---- DAE编码器（端到端训练模式） ----
+        if use_dae:
+            dae_output_dim = DAE_HIDDEN_DIM[-1]  # 编码后特征维度，如3
+            self.dae = DenoisingAE(
+                input_dim=n_external,
+                hidden_dim=DAE_HIDDEN_DIM,
+                noise_std=NOISE_STD,
+                dropout=dropout,
+            )
+            # 加载预训练权重作为初始化（如果有）
+            pretrained = dae_pretrained_path or DAE_MODEL_FILE_PATH
+            if os.path.exists(pretrained):
+                state_dict = torch.load(pretrained, map_location='cpu')
+                self.dae.load_state_dict(state_dict)
+                print(f"  📦 DAE预训练权重已加载: {pretrained}")
+            else:
+                print(f"  ⚠️ DAE预训练权重未找到，使用随机初始化: {pretrained}")
 
-        # 为每个IMF分量创建独立的SubNet子网络
-        self.sub_nets = nn.ModuleList([
-            SubNet(
+            self.dae_output_dim = dae_output_dim
+            input_dim = 1 + dae_output_dim  # SubNet输入: 1(IMF) + dae_output_dim
+        else:
+            input_dim = 1 + n_external  # SubNet输入: 1(IMF) + n_external
+
+        if share_subnet:
+            # 参数共享：所有IMF共用同一个SubNet，参数量仅为独立模式的1/n_imf
+            self.shared_subnet = SubNet(
                 input_dim=input_dim,
                 tcn_hidden=tcn_hidden,
                 tcn_output=tcn_output,
                 lstm_hidden=lstm_hidden,
                 lstm_layers=lstm_layers,
-                unified_dim=unified_dim
+                unified_dim=unified_dim,
+                dropout=dropout,
             )
-            for _ in range(n_imf)
-        ])
+        else:
+            # 独立模式：每个IMF分量拥有独立的SubNet
+            self.sub_nets = nn.ModuleList([
+                SubNet(
+                    input_dim=input_dim,
+                    tcn_hidden=tcn_hidden,
+                    tcn_output=tcn_output,
+                    lstm_hidden=lstm_hidden,
+                    lstm_layers=lstm_layers,
+                    unified_dim=unified_dim,
+                    dropout=dropout,
+                )
+                for _ in range(n_imf)
+            ])
 
-    def forward(self, imfs: torch.Tensor, externals: torch.Tensor):
+    def _encode_externals(self, externals: torch.Tensor):
         """
-        前向传播过程
-
-        处理流程:
-        1. 遍历每个IMF分量，提取对应的IMF数据
-        2. 将当前IMF与外部特征在特征维度拼接
-        3. 通过对应的SubNet子网络进行预测，获取预测值和注意力权重
-        4. 累加所有IMF的预测值得到最终预测结果
-        5. 收集所有子网络的注意力权重用于后续分析
+        使用DAE编码器对原始外部特征进行编码
 
         Args:
-            imfs (torch.Tensor): IMF分量张量，形状为 (batch_size, seq_len, n_imf)
-            externals (torch.Tensor): 外部特征张量，形状为 (batch_size, seq_len, n_external)
+            externals: 原始外部特征，形状 (batch, seq_len, n_external)
 
         Returns:
             tuple:
-                - total_pred (torch.Tensor): 最终预测值，形状为 (batch_size,)，为所有IMF预测值的累加和
-                - all_weights (list[torch.Tensor]): 注意力权重列表，长度为n_imf，
-                  每个元素为对应SubNet的注意力权重，用于可视化各IMF的时间重要性分布
+                - encoded: 编码后特征，形状 (batch, seq_len, dae_output_dim)
+                - decoded: 解码重构特征，形状 (batch, seq_len, n_external)
         """
+        batch_size, seq_len, n_raw = externals.shape
+        # 展平时间维度: (batch*seq_len, n_raw)
+        ext_flat = externals.reshape(-1, n_raw)
+        # DAE编码+解码
+        encoded_flat, decoded_flat = self.dae(ext_flat, noise=self.training)
+        # 恢复时间维度
+        encoded = encoded_flat.reshape(batch_size, seq_len, -1)
+        decoded = decoded_flat.reshape(batch_size, seq_len, n_raw)
+        return encoded, decoded
+
+    def compute_dae_loss(self, raw_externals: torch.Tensor) -> torch.Tensor:
+        """
+        计算DAE重构辅助损失
+
+        在端到端训练模式下，重构损失作为正则项防止编码器崩塌。
+        必须在forward()之后调用（因为需要用到forward中缓存的解码结果）。
+
+        Args:
+            raw_externals: 原始外部特征，形状 (batch, seq_len, n_external)
+
+        Returns:
+            torch.Tensor: 重构MSE损失（标量）
+        """
+        if not self.use_dae:
+            return torch.tensor(0.0, device=raw_externals.device)
+        batch_size, seq_len, n_raw = raw_externals.shape
+        ext_flat = raw_externals.reshape(-1, n_raw)
+        _, decoded_flat = self.dae(ext_flat, noise=self.training)
+        return F.mse_loss(decoded_flat, ext_flat)
+
+    def forward(self, imfs: torch.Tensor, externals: torch.Tensor):
+        """
+         前向传播过程
+
+         处理流程:
+         1. 如果use_dae=True，先将原始外部特征编码为低维表示
+         2. 遍历每个IMF分量，提取对应的IMF数据
+         3. 将当前IMF与（编码后的）外部特征在特征维度拼接
+         4. 通过对应的SubNet子网络进行预测，获取预测值和注意力权重
+         5. 累加所有IMF的预测值得到最终预测结果
+         6. 收集所有子网络的注意力权重用于后续分析
+
+         Args:
+             imfs (torch.Tensor): IMF分量张量，形状为 (batch_size, seq_len, n_imf)
+             externals (torch.Tensor): 外部特征张量，形状为 (batch_size, seq_len, n_external)
+
+         Returns:
+             tuple:
+                 - total_pred (torch.Tensor): 最终预测值，形状为 (batch_size,)，为所有IMF预测值的累加和
+                 - all_weights (list[torch.Tensor]): 注意力权重列表，长度为n_imf，
+                   每个元素为对应SubNet的注意力权重，用于可视化各IMF的时间重要性分布
+         """
+        # DAE编码（端到端模式）
+        if self.use_dae:
+            encoded_externals, _ = self._encode_externals(externals)
+            ext_for_subnet = encoded_externals
+        else:
+            ext_for_subnet = externals
+
         total_pred = 0.0
         all_weights = []
 
@@ -205,7 +323,10 @@ class VMDCATBiLSTM(nn.Module):
         for i in range(self.n_imf):
             imf_i = imfs[:, :, i:i + 1]
             x_i = torch.cat([imf_i, externals], dim=-1)
-            pred_i, weights_i = self.sub_nets[i](x_i)
+            if self.share_subnet:
+                pred_i, weights_i = self.shared_subnet(x_i)
+            else:
+                pred_i, weights_i = self.sub_nets[i](x_i)
             total_pred += pred_i
             all_weights.append(weights_i)
 

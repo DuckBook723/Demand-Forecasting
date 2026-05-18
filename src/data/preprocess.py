@@ -166,8 +166,8 @@ def normalize_and_save(train: pd.DataFrame, val: pd.DataFrame, test: pd.DataFram
     test_scaler.to_csv(TEST_FILE_PATH)
     joblib.dump(scaler, SCALER_FILE_PATH)
 
-    demand_min = df[DEMAND_COL].min()
-    demand_max = df[DEMAND_COL].max()
+    demand_min = train[DEMAND_COL].min()
+    demand_max = train[DEMAND_COL].max()
 
     joblib.dump({'min': demand_min, 'max': demand_max}, DEMAND_MIN_MAX_SCALER_PATH)
 

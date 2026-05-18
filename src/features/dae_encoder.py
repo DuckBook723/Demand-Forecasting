@@ -45,7 +45,7 @@ class DenoisingAE(nn.Module):
     该模型通过在输入数据中添加高斯噪声来训练自编码器，使其能够学习数据的鲁棒特征表示。
     包含编码器和解码器两个部分，编码器将输入压缩为低维表示，解码器尝试从编码中重构原始输入。
     """
-    def __init__(self, input_dim: int, hidden_dim: list, noise_std: float):
+    def __init__(self, input_dim: int, hidden_dim: list, noise_std: float, dropout: float = 0.2):
         """
         初始化去噪自编码器模型。
 
@@ -65,7 +65,7 @@ class DenoisingAE(nn.Module):
                 nn.Linear(dims[i], dims[i + 1]),
                 nn.BatchNorm1d(dims[i + 1]),
                 nn.ReLU(),
-                nn.Dropout(0.1)
+                nn.Dropout(dropout)
             ])
         self.encoder = nn.Sequential(*layers)
         # 解码器
@@ -77,7 +77,7 @@ class DenoisingAE(nn.Module):
                 nn.ReLU(),
             ])
             if i < len(dims_rev) - 2:
-                layers.append(nn.Dropout(0.1))
+                layers.append(nn.Dropout(dropout))
         self.decoder = nn.Sequential(*layers)
 
     def add_noise(self, x: torch.Tensor) -> torch.Tensor:

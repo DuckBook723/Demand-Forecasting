@@ -67,7 +67,7 @@ class TABiLSTM(nn.Module):
     并通过注意力机制自动识别关键时间步，适用于需求预测等时序任务。
     """
 
-    def __init__(self, input_dim: int, hidden_dim: int = 64, num_layers: int = 2):
+    def __init__(self, input_dim: int, hidden_dim: int = 64, num_layers: int = 2, dropout: float = 0.2):
         """
         初始化TA-BiLSTM模型
 
@@ -75,6 +75,7 @@ class TABiLSTM(nn.Module):
             input_dim: 输入特征维度
             hidden_dim: LSTM隐藏层维度，默认64
             num_layers: LSTM层数，默认2
+            dropout: Dropout比率，默认0.2
         """
         super(TABiLSTM, self).__init__()
 
@@ -91,7 +92,7 @@ class TABiLSTM(nn.Module):
             num_layers=num_layers,
             batch_first=True,
             bidirectional=True,
-            dropout=0.2 if num_layers > 1 else 0.0
+            dropout=dropout  if num_layers > 1 else 0.0
         )
 
         # 层归一化：对双向LSTM的输出进行归一化（维度为hidden_dim*2）
@@ -101,7 +102,7 @@ class TABiLSTM(nn.Module):
         self.temporal_attention = TemporalAttention(hidden_dim * 2)
 
         # Dropout层：防止过拟合
-        self.drop = nn.Dropout(0.2)
+        self.drop = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor):
         """
@@ -130,5 +131,3 @@ class TABiLSTM(nn.Module):
         context, weights = self.temporal_attention(lstm_out)
 
         return context, weights
-
-

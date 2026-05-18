@@ -25,6 +25,7 @@ import os
 import argparse
 import torch
 import time
+import pandas as pd
 from configs.config import (
     DATA_PROCESSED_DIR,     # 数据处理结果目录
     DEMAND_COL,             # 目标列名
@@ -37,12 +38,18 @@ from configs.config import (
     LSTM_HIDDEN,            # LSTM隐藏层数
     LSTM_LAYERS,            # LSTM层数
     UNIFIED_DIM,            # 门控融合同一纬度
+    DROPOUT,                # dropout比例
+    EARLY_STOPPING,         # 早停开关
+    PATIENCE,               # 早停耐心值
     MODEL_FILE_PATH,        # 模型保存路径
+    TRAIN_RECORD_FILE_PATH, # 训练记录保存路径
+    WEIGHT_DECAY,           # 权重衰减系数
+    SHARE_SUBNET,           # SubNet参数共享
+    DAE_END_TO_END,         # DAE端到端训练开关
 )
 from src.data.dataset import get_dataloaders
 from src.models.vmd_cat_bilstm import VMDCATBiLSTM
 from src.models.trainer import train_model
-
 
 # ======================== 1. 判断数据集是否准备就绪 =======================
 def check_dataset_ready():
@@ -83,29 +90,35 @@ def check_dataset_ready():
             print("=" * 60 + "\n")
             sys.exit(1)
 
-
 # ======================== 2. 参数解析 =======================
 def parse_args():
     """
-    解析命令行参数
+    命令行参数解析函数。
 
-    使用argparse创建命令行参数解析器，支持配置模型超参数和训练参数。
-    所有参数的默认值从config模块导入，允许通过命令行覆盖默认配置。
+    解析训练过程中所需的超参数配置，支持从命令行覆盖默认值。
+    所有参数的默认值均从 configs.config 模块导入的全局常量中获取。
 
     Returns:
-        argparse.Namespace: 包含以下属性的命名空间对象:
-            - seq_len (int): 输入时间窗口长度，默认为SEQ_LEN
-            - batch_size (int): 批次大小，默认为BATCH_SIZE
-            - epochs (int): 最大训练轮数，默认为EPOCHS
-            - lr (float): 初始学习率，默认为LEARNING_RATE
-            - tcn_hidden (int): TCN隐藏层维度，默认为TCN_HIDDEN
-            - tcn_output (int): TCN输出维度（BiLSTM输入维度），默认为TCN_OUTPUT
-            - lstm_hidden (int): BiLSTM隐藏层维度，默认为LSTM_HIDDEN
-            - lstm_layers (int): BiLSTM层数，默认为LSTM_LAYERS
-            - unified_dim (int): 门控融合统一维度，默认为UNIFIED_DIM
+        argparse.Namespace: 包含以下属性的命名空间对象：
+            - seq_len (int): 输入时间窗口长度（回看过去几个月）
+            - batch_size (int): Batch大小
+            - epochs (int): 最大训练轮数
+            - lr (float): 初始学习率
+            - tcn_hidden (int): TCN隐藏层维度
+            - tcn_output (int): TCN输出维度 / BiLSTM输入维度
+            - lstm_hidden (int): BiLSTM隐藏层维度
+            - lstm_layers (int): BiLSTM层数
+            - unified_dim (int): 门控融合统一维度
+            - weight_decay (float): 权重衰减系数，用于L2正则化
+            - dropout (float): Dropout比率，用于防止过拟合
+            - early_stopping (bool): 是否启用早停机制
+            - patience (int): 早停耐心值，即验证集性能不提升时的最大等待轮数
+            - share_subnet (bool): 是否共享SubNet参数（所有IMF分量共用同一子网络）
 
     Example:
-        python scripts/train.py --seq_len 24 --batch_size 64 --epochs 100 --lr 0.001
+        >>> args = parse_args()
+        >>> print(args.lr)  # 默认值来自 configs.config.LEARNING_RATE
+        >>> # 可通过命令行覆盖: python train.py --lr 0.001 --epochs 100
     """
     parser = argparse.ArgumentParser(description="Train VMD-CAT-BiLSTM for Grid Material Demand")
     parser.add_argument('--seq_len', type=int, default=SEQ_LEN, help='输入时间窗口长度 (回看过去几个月)')
@@ -117,8 +130,12 @@ def parse_args():
     parser.add_argument('--lstm_hidden', type=int, default=LSTM_HIDDEN, help='BiLSTM隐藏层维度')
     parser.add_argument('--lstm_layers', type=int, default=LSTM_LAYERS, help='BiLSTM层数')
     parser.add_argument('--unified_dim', type=int, default=UNIFIED_DIM, help='门控融合统一维度')
+    parser.add_argument('--weight_decay', type=float, default=WEIGHT_DECAY, help='权重衰减系数')
+    parser.add_argument('--dropout', type=float, default=DROPOUT, help='Dropout比率')
+    parser.add_argument('--early_stopping', type=bool, default=EARLY_STOPPING, help='是否启用早停')
+    parser.add_argument('--patience', type=int, default=PATIENCE, help='早停耐心值')
+    parser.add_argument('--share_subnet', type=bool, default=SHARE_SUBNET, help='是否共享SubNet参数')
     return parser.parse_args()
-
 
 # ======================== 3. 训练主函数 =======================
 def main():
@@ -152,12 +169,29 @@ def main():
 
     check_dataset_ready()
 
-    print("\n📂 Loading data and building DataLoaders...")
+    # 根据DAE端到端模式选择数据模式
+    if DAE_END_TO_END:
+        # 端到端模式：读取原始CSV，模型内部DAE编码
+        import json
+        from configs.config import FEATURE_SELECTION_FILE_PATH
+        selected_features = None
+        if os.path.exists(FEATURE_SELECTION_FILE_PATH):
+            with open(FEATURE_SELECTION_FILE_PATH, 'r') as f:
+                selected_features = json.load(f)
+        data_mode = 'no_dae'
+        ext_cols_override = selected_features
+    else:
+        data_mode = 'vmd_dae'
+        ext_cols_override = None
+
+    print(f"\n📂 Loading data and building DataLoaders... (data_mode={data_mode})")
     train_loader, val_loader, test_loader, n_imf, n_ext = get_dataloaders(
         data_dir=DATA_PROCESSED_DIR,
         target_col=DEMAND_COL,
         seq_len=parser.seq_len,
-        batch_size=parser.batch_size
+        batch_size=parser.batch_size,
+        data_mode=data_mode,
+        ext_cols_override=ext_cols_override,
     )
 
     # 验证数据集有效性，确保有足够样本进行训练
@@ -174,7 +208,10 @@ def main():
         tcn_output=parser.tcn_output,
         lstm_hidden=parser.lstm_hidden,
         lstm_layers=parser.lstm_layers,
-        unified_dim=parser.unified_dim
+        unified_dim=parser.unified_dim,
+        dropout=parser.dropout,
+        share_subnet=parser.share_subnet,
+        use_dae=DAE_END_TO_END,
     ).to(device)
 
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -192,7 +229,16 @@ def main():
         epochs=parser.epochs,
         lr=parser.lr,
         device=device,
+        early_stopping=parser.early_stopping,
+        patience=parser.patience,
     )
+
+    # 保存训练记录至csv
+    if training_records:
+        records_df = pd.DataFrame(training_records)
+        os.makedirs(os.path.dirname(TRAIN_RECORD_FILE_PATH), exist_ok=True)
+        records_df.to_csv(TRAIN_RECORD_FILE_PATH, index=False)
+        print(f"💾 Training records saved at: {TRAIN_RECORD_FILE_PATH}")
 
     end_time = time.time()
     print(f"\n🏁 Training finished! Total time: {(end_time - start_time) / 60:.2f} mins")

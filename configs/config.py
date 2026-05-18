@@ -8,6 +8,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # 2.1 原始模拟数据
 SIM_DATASET_FILENAME = 'grid_material_demand_sim.csv'
+MATERIAL_DEMAND_DIR = 'material_monthly'
 # 2.2 处理后数据文件名
 TRAIN_FILE_NAME = 'train.csv'
 VAL_FILE_NAME = 'val.csv'
@@ -22,6 +23,8 @@ FEATURE_EVALUATION_FILE_NAME = 'feature_evaluation.csv'
 DAE_MODEL_FILE_NAME = 'dae_model.pth'
 # 2.7 训练模型文件名
 MODEL_FILE_NAME = 'vmd_cat_bilstm_model.pth'
+# 2.8 训练记录保存文件名
+TRAIN_RECORD_FILE_NAME = 'train_record.csv'
 
 # ======================= 3. 数据路径 =======================
 
@@ -30,6 +33,7 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 # 3.2 原始数据目录
 DATA_RAW_DIR = os.path.join(DATA_DIR, 'raw')
 SIM_DATASET_PATH = os.path.join(DATA_RAW_DIR, SIM_DATASET_FILENAME)
+MATERIAL_DEMAND_PATH = os.path.join(DATA_RAW_DIR, MATERIAL_DEMAND_DIR)
 # 3.3 处理后数据目录
 DATA_PROCESSED_DIR = os.path.join(DATA_DIR, 'processed')
 TRAIN_FILE_PATH = os.path.join(DATA_PROCESSED_DIR, TRAIN_FILE_NAME)
@@ -51,6 +55,8 @@ DAE_MODEL_FILE_PATH = os.path.join(MODELS_DIR, DAE_MODEL_FILE_NAME)
 DATA_FIGURES_DIR = os.path.join(FIGURES_DIR, 'data')
 # 3.9 训练模型文件保存路径
 MODEL_FILE_PATH = os.path.join(MODELS_DIR, MODEL_FILE_NAME)
+# 3.10 训练记录保存路径
+TRAIN_RECORD_FILE_PATH = os.path.join(DATA_FIGURES_DIR, TRAIN_RECORD_FILE_NAME)
 
 # ======================== 4. VMD 分解参数 ========================
 
@@ -92,16 +98,41 @@ SEQ_LEN = 12
 # ======================= 8. 模型训练参数 =======================
 
 # 8.1 训练轮次
-EPOCHS = 200
+EPOCHS = 150
 # 8.2 学习率
 LEARNING_RATE = 1e-3
 # 8.3 TCN隐藏层维度
-TCN_HIDDEN = 64
+TCN_HIDDEN = 32
 # 8.4 TCN输出维度
-TCN_OUTPUT = 32
-# 8.5 LSTM隐藏层数
-LSTM_HIDDEN = 64
+TCN_OUTPUT = 16
+# 8.5 LSTM隐藏层维度
+LSTM_HIDDEN = 32
 # 8.6 LSTM层数
 LSTM_LAYERS = 2
 # 8.7 门控融合同一纬度
-UNIFIED_DIM = 128
+UNIFIED_DIM = 64
+# 8.8 L2 正则化权重衰减系数
+WEIGHT_DECAY = 1e-5
+# 8.9 dropout 概率
+DROPOUT = 0.3
+# 8.10 早停开关
+EARLY_STOPPING = True
+# 8.11 早停耐心值
+PATIENCE = 20
+# 8.12 SubNet参数共享
+SHARE_SUBNET = True
+# 8.13 DAE端到端训练开关
+DAE_END_TO_END = True
+# 8.14 DAE重构辅助损失权重
+RECON_LOSS_WEIGHT = 0.1
+
+# ======================= 9. 实验相关路径 =======================
+
+# 9.1 实验目录
+EXPERIMENTS_DIR = os.path.join(BASE_DIR, 'experiments')
+# 9.2 消融实验模型保存目录
+ABLATION_MODELS_DIR = os.path.join(MODELS_DIR, 'ablation')
+# 9.3 消融实验训练记录保存目录
+ABLATION_RECORDS_DIR = os.path.join(DATA_FIGURES_DIR, 'ablation')
+# 9.4 消融实验汇总结果文件路径
+ABLATION_RESULTS_PATH = os.path.join(DATA_FIGURES_DIR, 'ablation_results.csv')
