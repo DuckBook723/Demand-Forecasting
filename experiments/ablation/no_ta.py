@@ -96,8 +96,11 @@ class BiLSTMNoTA(nn.Module):
         lstm_out = self.layer_norm(lstm_out)
         lstm_out = self.drop(lstm_out)
 
-        # 取最后一个时间步的输出（而非注意力加权）
-        last_hidden = lstm_out[:, -1, :]
+        # 取前向LSTM末步 + 反向LSTM首步的拼接（正确利用双向信息）
+        # 前向LSTM的末步已看过全部序列，反向LSTM的首步也已看过全部序列
+        forward_last = lstm_out[:, -1, :lstm_out.size(-1) // 2]  # 前向末步
+        backward_first = lstm_out[:, 0, lstm_out.size(-1) // 2:]   # 反向首步
+        last_hidden = torch.cat([forward_last, backward_first], dim=-1)
 
         # 生成均匀注意力权重（仅用于接口兼容，不影响模型计算）
         batch_size, seq_len, _ = lstm_out.shape
@@ -161,7 +164,7 @@ class SubNetNoTA(nn.Module):
         # 预测头生成最终预测结果
         self.prediction_head = PredictionHead(
             input_dim=unified_dim,
-            hidden_dims=[64, 32],
+            hidden_dims=[unified_dim, unified_dim // 2],
             dropout=dropout,
         )
 
@@ -269,19 +272,28 @@ class NoTAModel(nn.Module):
         该方法用于在端到端训练过程中对DAE编码器进行正则化约束，通过计算重构误差来保证编码质量。
         如果未启用DAE（use_dae=False），则返回零张量以保持损失计算的兼容性。
 
+        优先使用 forward() 中缓存的解码结果，避免重复前向传播导致噪声不一致。
+        使用 _cache_valid 标志位判断缓存是否来自当前 forward 调用，
+        避免依赖 Python 对象同一性（is 检查），因为 PyTorch 切片操作每次创建新视图对象。
+
         Args:
             raw_externals (torch.Tensor): 原始外部特征张量，形状为 (batch_size, seq_length, n_external)
 
         Returns:
             torch.Tensor: DAE重构损失标量值。如果未启用DAE则返回0.0，否则返回均方误差损失
-
-        Note:
-            - 使用self.training标志控制是否在推理时添加噪声
-            - 损失函数采用均方误差（MSE）衡量重构质量
-            - 输入张量会被展平为二维以匹配DAE的输入格式
         """
         if not self.use_dae:
             return torch.tensor(0.0, device=raw_externals.device)
+        # 优先使用 forward() 中缓存的解码结果，避免重复前向传播
+        # 注意：不能用 is 检查对象同一性，因为 PyTorch 切片操作每次创建新视图对象
+        if getattr(self, '_cache_valid', False):
+            if self._cached_decoded.shape == raw_externals.shape:
+                self._cache_valid = False  # 消费缓存，防止重复使用
+                return F.mse_loss(
+                    self._cached_decoded.reshape(-1, self._cached_decoded.shape[-1]),
+                    self._cached_raw.reshape(-1, self._cached_raw.shape[-1])
+                )
+        # 降级：如果缓存不可用，则重新计算
         batch_size, seq_len, n_raw = raw_externals.shape
         ext_flat = raw_externals.reshape(-1, n_raw)
         _, decoded_flat = self.dae(ext_flat, noise=self.training)
@@ -304,7 +316,11 @@ class NoTAModel(nn.Module):
         if self.use_dae:
             batch_size, seq_len, n_raw = externals.shape
             ext_flat = externals.reshape(-1, n_raw)
-            encoded_flat, _ = self.dae(ext_flat, noise=self.training)
+            encoded_flat, decoded_flat = self.dae(ext_flat, noise=self.training)
+            # 缓存解码结果，供 compute_dae_loss() 使用，避免重复前向传播
+            self._cached_decoded = decoded_flat.reshape(batch_size, seq_len, n_raw)
+            self._cached_raw = externals
+            self._cache_valid = True  # 标记缓存有效（当前 forward 调用产生）
             ext_for_subnet = encoded_flat.reshape(batch_size, seq_len, -1)
         else:
             ext_for_subnet = externals

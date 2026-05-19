@@ -17,6 +17,7 @@
 # ======================== 0. 引入包 =======================
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 # ======================== 1. 门控融合机制 =======================
 class GateFusion(nn.Module):
@@ -104,14 +105,12 @@ class PredictionHead(nn.Module):
 
     def __init__(self, input_dim: int, hidden_dims: list = None, dropout: float = 0.2):
         super().__init__()
+        super().__init__()
         if hidden_dims is None:
             hidden_dims = [64, 32]
-
-        # 构建网络层序列
         layers = []
         current_dim = input_dim
         for hidden_dim in hidden_dims:
-            # 每个隐藏层包含：线性变换 -> 批归一化 -> ReLU激活 -> Dropout
             layers.extend([
                 nn.Linear(current_dim, hidden_dim),
                 nn.BatchNorm1d(hidden_dim),
@@ -119,10 +118,9 @@ class PredictionHead(nn.Module):
                 nn.Dropout(dropout)
             ])
             current_dim = hidden_dim
-
-        # 输出层：映射到单一预测值
+        # 输出层：添加 Sigmoid 将输出压缩到 (0,1)
         layers.append(nn.Linear(current_dim, 1))
-
+        layers.append(nn.Sigmoid())  # ← 关键修改
         self.net = nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

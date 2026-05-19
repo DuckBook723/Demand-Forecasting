@@ -98,7 +98,7 @@ class SubNet(nn.Module):
 
         self.prediction_head = PredictionHead(
             input_dim=unified_dim,
-            hidden_dims=[64, 32],
+            hidden_dims=[unified_dim, unified_dim // 2],
             dropout=dropout,
         )
 
@@ -249,6 +249,8 @@ class VMDCATBiLSTM(nn.Module):
         """
         使用DAE编码器对原始外部特征进行编码
 
+        同时缓存解码结果，供 compute_dae_loss() 使用，避免重复前向传播。
+
         Args:
             externals: 原始外部特征，形状 (batch, seq_len, n_external)
 
@@ -265,6 +267,10 @@ class VMDCATBiLSTM(nn.Module):
         # 恢复时间维度
         encoded = encoded_flat.reshape(batch_size, seq_len, -1)
         decoded = decoded_flat.reshape(batch_size, seq_len, n_raw)
+        # 缓存解码结果和原始输入，供 compute_dae_loss() 使用，避免重复前向传播
+        self._cached_decoded = decoded
+        self._cached_raw = externals
+        self._cache_valid = True  # 标记缓存有效（当前 forward 调用产生）
         return encoded, decoded
 
     def compute_dae_loss(self, raw_externals: torch.Tensor) -> torch.Tensor:
@@ -272,7 +278,12 @@ class VMDCATBiLSTM(nn.Module):
         计算DAE重构辅助损失
 
         在端到端训练模式下，重构损失作为正则项防止编码器崩塌。
-        必须在forward()之后调用（因为需要用到forward中缓存的解码结果）。
+        优先使用 forward() 中缓存的解码结果，避免对 DAE 进行重复前向传播
+        （确保重构损失与实际编码使用的噪声实例一致，梯度更新正确）。
+
+        使用 _cache_valid 标志位判断缓存是否来自当前 forward 调用，
+        避免依赖 Python 对象同一性（is 检查），因为 PyTorch 切片操作
+        每次创建新视图对象，导致 is 检查在 single 模型下始终为 False。
 
         Args:
             raw_externals: 原始外部特征，形状 (batch, seq_len, n_external)
@@ -282,6 +293,17 @@ class VMDCATBiLSTM(nn.Module):
         """
         if not self.use_dae:
             return torch.tensor(0.0, device=raw_externals.device)
+        # 优先使用 forward() 中缓存的解码结果，避免重复前向传播
+        # 注意：不能用 is 检查对象同一性，因为 PyTorch 切片操作每次创建新视图对象
+        if getattr(self, '_cache_valid', False):
+            # 验证缓存形状与当前输入一致
+            if self._cached_decoded.shape == raw_externals.shape:
+                self._cache_valid = False  # 消费缓存，防止重复使用
+                return F.mse_loss(
+                    self._cached_decoded.reshape(-1, self._cached_decoded.shape[-1]),
+                    self._cached_raw.reshape(-1, self._cached_raw.shape[-1])
+                )
+        # 降级：如果缓存不可用（如独立调用），则重新计算
         batch_size, seq_len, n_raw = raw_externals.shape
         ext_flat = raw_externals.reshape(-1, n_raw)
         _, decoded_flat = self.dae(ext_flat, noise=self.training)
@@ -322,7 +344,7 @@ class VMDCATBiLSTM(nn.Module):
         # 遍历每个IMF分量，独立预测后累加
         for i in range(self.n_imf):
             imf_i = imfs[:, :, i:i + 1]
-            x_i = torch.cat([imf_i, externals], dim=-1)
+            x_i = torch.cat([imf_i, ext_for_subnet], dim=-1)
             if self.share_subnet:
                 pred_i, weights_i = self.shared_subnet(x_i)
             else:

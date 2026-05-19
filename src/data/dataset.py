@@ -178,8 +178,6 @@ class GridMaterialDataset(Dataset):
         else:
             raise ValueError(f"❌ 不支持的数据模式: {data_mode}，请选择 'vmd_dae' / 'no_vmd' / 'no_vmd_raw' / 'no_dae'")
 
-            assert target_col in self.df.columns, f"❌ 未找到目标列 {target_col}！"
-
         self.target_data = self.df[target_col].values
 
     def __len__(self):
@@ -289,7 +287,8 @@ def get_dataloaders(
     print(f"📊 数据集构建完成 | 模式: {data_mode} | IMF数: {n_imf}, 外部特征数: {n_ext}")
     print(f"   训练集样本数: {len(train_dataset)} | 验证集: {len(val_dataset)} | 测试集: {len(test_dataset)}")
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True,
+                              generator=torch.Generator().manual_seed(42))
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 

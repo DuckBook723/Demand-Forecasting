@@ -181,7 +181,7 @@ def train_dae(epochs: int, batch_size: int, lr: float, noise_std: float, hidden_
 
         model.eval()
         with torch.no_grad():
-            x_encoded, x_decoded = model(x_val_tensor, True)
+            x_encoded, x_decoded = model(x_val_tensor, False)  # 验证时不加噪声
             val_loss = criterion(x_decoded, x_val_tensor).item()
             val_losses.append(val_loss)
 

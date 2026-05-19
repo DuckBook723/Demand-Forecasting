@@ -1,12 +1,20 @@
 """
 文件位置: experiments/ablation/no_vmd.py
-作用: 消融实验模型 A1 —— 去除 VMD 分解的对比模型
+作用: 消融实验模型 A1 —— 去除 VMD 分解的对比模型（含容量补偿）
       将原始demand序列与DAE编码后的外部特征直接拼接为单一输入，
       通过 CA-TCN → TA-BiLSTM → GateFusion → PredictionHead 单分支结构进行预测。
       用于验证VMD分解对模型性能的贡献：若该模型指标明显下降，则证明VMD分解有效。
+
+容量补偿说明:
+      Full模型通过VMD分解将demand拆为4个IMF，每个IMF独立走一次SubNet（共享参数），
+      4次前向传播的预测值累加，等效于4条建模路径，具有更强的多尺度建模能力。
+      NoVMD只有1条路径，直接处理未分解的原始信号，容量严重不足。
+      为确保消融实验公平性，NoVMD引入capacity_factor（默认2.0）将隐藏维度放大，
+      同时增加TCN层数以弥补缺乏VMD带来的多尺度分解能力。
+
       支持端到端DAE训练：当use_dae=True时，DAE编码器在forward中编码外部特征。
 所包含的类:
-  - NoVMDModel(nn.Module): 无VMD分解的消融模型
+  - NoVMDModel(nn.Module): 无VMD分解的消融模型（含容量补偿）
 是否需要创建: 是，本文件需要创建（P3 消融实验专用）
 相关文件更新:
   - 依赖 src/models/ca_tcn.py (CATCN)
@@ -61,23 +69,42 @@ class NoVMDModel(nn.Module):
             dropout: float = 0.2,
             use_dae: bool = False,
             dae_pretrained_path: str = None,
+            capacity_factor: float = 2.0,
     ):
         """
-        初始化 NoVMD 模型
+        初始化 NoVMD 模型（含容量补偿）
+
+        capacity_factor补偿原理：
+        Full模型将demand拆为n_imf个IMF，每个IMF独立通过SubNet（共享参数），
+        等效n_imf条建模路径的预测累加。NoVMD仅有1条路径，直接建模全频段信号。
+        为保证消融公平性，通过capacity_factor放大隐藏维度：
+        - tcn_hidden_comp = tcn_hidden * capacity_factor
+        - lstm_hidden_comp = lstm_hidden * capacity_factor
+        - unified_dim_comp = unified_dim * capacity_factor
+        同时增加TCN层数（+2层），弥补VMD缺失导致的多尺度分解能力不足。
 
         Args:
             n_external (int): 外部特征维度
-            tcn_hidden (int): TCN隐藏层维度
+            tcn_hidden (int): TCN隐藏层维度（补偿前基准值）
             tcn_output (int): TCN输出维度
-            lstm_hidden (int): BiLSTM隐藏层维度
+            lstm_hidden (int): BiLSTM隐藏层维度（补偿前基准值）
             lstm_layers (int): BiLSTM层数
-            unified_dim (int): 门控融统一维度
+            unified_dim (int): 门控融统一维度（补偿前基准值）
+            dropout (float): Dropout比率
             use_dae (bool): 是否使用端到端DAE编码器
             dae_pretrained_path (str): DAE 预训练权重路径
+            capacity_factor (float): 容量补偿因子，默认2.0（将隐藏维度翻倍）
         """
         super(NoVMDModel, self).__init__()
 
         self.use_dae = use_dae
+
+        # ---- 容量补偿：放大隐藏维度以弥补单分支劣势 ----
+        tcn_hidden_comp = int(tcn_hidden * capacity_factor)
+        lstm_hidden_comp = int(lstm_hidden * capacity_factor)
+        unified_dim_comp = int(unified_dim * capacity_factor)
+        # TCN层数增加2层以弥补VMD多尺度分解能力的缺失
+        tcn_num_layers_comp = 4 + 2  # 默认4层 → 6层
 
         # ---- DAE编码器（端到端训练模式） ----
         if use_dae:
@@ -98,8 +125,9 @@ class NoVMDModel(nn.Module):
 
         self.ca_tcn = CATCN(
             input_dim=input_dim,
-            hidden_dim=tcn_hidden,
+            hidden_dim=tcn_hidden_comp,
             output_dim=tcn_output,
+            num_layers=tcn_num_layers_comp,
             dropout=dropout,
         )
 
@@ -107,20 +135,20 @@ class NoVMDModel(nn.Module):
 
         self.ta_bilstm = TABiLSTM(
             input_dim=tcn_output,
-            hidden_dim=lstm_hidden,
+            hidden_dim=lstm_hidden_comp,
             num_layers=lstm_layers,
             dropout=dropout,
         )
 
         self.fusion = GateFusion(
             local_dim=tcn_output,
-            global_dim=lstm_hidden * 2,
-            unified_dim=unified_dim,
+            global_dim=lstm_hidden_comp * 2,
+            unified_dim=unified_dim_comp,
         )
 
         self.prediction_head = PredictionHead(
-            input_dim=unified_dim,
-            hidden_dims=[64, 32],
+            input_dim=unified_dim_comp,
+            hidden_dims=[unified_dim_comp, unified_dim_comp // 2],
             dropout=dropout,
         )
 
@@ -130,6 +158,11 @@ class NoVMDModel(nn.Module):
 
         该方法用于在端到端训练过程中对DAE编码器进行正则化约束，通过计算重构误差来保证编码质量。
         如果未启用DAE（use_dae=False），则返回零张量以保持损失计算的兼容性。
+
+        优先使用 forward() 中缓存的解码结果，避免重复前向传播导致噪声不一致。
+        使用 _cache_valid 标志位判断缓存是否来自当前 forward 调用，
+        避免依赖 Python 对象同一性（is 检查），因为 PyTorch 切片操作每次创建新视图对象，
+        导致 is 检查在 single 模型下始终为 False。
 
         Args:
             raw_externals (torch.Tensor): 原始外部特征张量，形状为 (batch_size, seq_length, n_external)
@@ -144,6 +177,18 @@ class NoVMDModel(nn.Module):
         """
         if not self.use_dae:
             return torch.tensor(0.0, device=raw_externals.device)
+        # 优先使用 forward() 中缓存的解码结果，避免重复前向传播
+        # 注意：不能用 is 检查对象同一性，因为 trainer 中 x[:, :, 1:] 与 forward 中
+        # x[:, :, 1:] 是不同的 PyTorch 视图对象（即使底层存储相同）
+        if getattr(self, '_cache_valid', False):
+            # 验证缓存形状与当前输入一致
+            if (self._cached_decoded.shape == raw_externals.shape):
+                self._cache_valid = False  # 消费缓存，防止重复使用
+                return F.mse_loss(
+                    self._cached_decoded.reshape(-1, self._cached_decoded.shape[-1]),
+                    self._cached_raw.reshape(-1, self._cached_raw.shape[-1])
+                )
+        # 降级：如果缓存不可用，则重新计算
         batch_size, seq_len, n_raw = raw_externals.shape
         ext_flat = raw_externals.reshape(-1, n_raw)
         _, decoded_flat = self.dae(ext_flat, noise=self.training)
@@ -170,8 +215,13 @@ class NoVMDModel(nn.Module):
 
             # 编码外部特征
             ext_flat = raw_features.reshape(-1, n_raw)
-            encoded_flat, _ = self.dae(ext_flat, noise=self.training)
+            encoded_flat, decoded_flat = self.dae(ext_flat, noise=self.training)
             encoded = encoded_flat.reshape(batch_size, seq_len, -1)
+
+            # 缓存解码结果，供 compute_dae_loss() 使用，避免重复前向传播
+            self._cached_decoded = decoded_flat.reshape(batch_size, seq_len, n_raw)
+            self._cached_raw = raw_features
+            self._cache_valid = True  # 标记缓存有效（当前 forward 调用产生）
 
             # 重新拼接: demand + encoded_features
             x = torch.cat([demand, encoded], dim=-1)

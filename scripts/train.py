@@ -71,11 +71,12 @@ def check_dataset_ready():
         3. feature_selector.py - 特征筛选
         4. dae_encoder.py - DAE特征降维
     """
-    required_files = [
-        os.path.join(DATA_PROCESSED_DIR, 'train_encoded.csv'),
-        os.path.join(DATA_PROCESSED_DIR, 'val_encoded.csv'),
-        os.path.join(DATA_PROCESSED_DIR, 'test_encoded.csv')
-    ]
+    if DAE_END_TO_END:
+        required_files = [os.path.join(DATA_PROCESSED_DIR, f)
+                          for f in ['train.csv', 'val.csv', 'test.csv']]
+    else:
+        required_files = [os.path.join(DATA_PROCESSED_DIR, f)
+                          for f in ['train_encoded.csv', 'val_encoded.csv', 'test_encoded.csv']]
 
     for f in required_files:
         if not os.path.exists(f):
@@ -231,6 +232,8 @@ def main():
         device=device,
         early_stopping=parser.early_stopping,
         patience=parser.patience,
+        weight_decay=parser.weight_decay,
+        model_type='vmd',
     )
 
     # 保存训练记录至csv

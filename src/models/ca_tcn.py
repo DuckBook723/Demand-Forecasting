@@ -156,10 +156,11 @@ class TemporalBlock(nn.Module):
             经过残差连接和激活函数后的输出张量
         """
         out = self.net(x)
-        out = self.eca(out)
         res = self.residual_conv(x)
         out = out + res
-        return F.relu(out)
+        out = F.relu(out)
+        out = self.eca(out)
+        return out
 
 # ======================== 4. CATCN 模块 =======================
 class CATCN(nn.Module):

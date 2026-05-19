@@ -312,6 +312,10 @@ def run_single_experiment(config: dict, epochs: int, device: str) -> dict:
     else:
         # single模式不需要n_imf和share_subnet
         single_kwargs = {k: v for k, v in common_kwargs.items() if k != 'share_subnet'}
+        # NoVMD模型自动应用容量补偿（capacity_factor=2.0）
+        # 弥补Full模型4条IMF路径 vs NoVMD单路径的容量差异
+        if 'capacity_factor' not in single_kwargs:
+            single_kwargs['capacity_factor'] = 2.0
         model = model_class(
             n_external=n_ext,
             **single_kwargs,
@@ -359,6 +363,7 @@ def run_single_experiment(config: dict, epochs: int, device: str) -> dict:
     print(f"      RMSE:  {eval_results['RMSE']:.4f}")
     print(f"      MAE:   {eval_results['MAE']:.4f}")
     print(f"      MAPE:  {eval_results['MAPE']:.2f}%")
+    print(f"      R2:    {eval_results['R2']:.4f}")
 
     # ---- 2.5 汇总结果 ----
     result = {
@@ -367,6 +372,7 @@ def run_single_experiment(config: dict, epochs: int, device: str) -> dict:
         'RMSE': eval_results['RMSE'],
         'MAE': eval_results['MAE'],
         'MAPE': eval_results['MAPE'],
+        'R2': eval_results['R2'],
         'n_params': eval_results['n_params'],
         'train_time_min': round(train_time / 60, 2),
         'model_type': model_type,
@@ -467,7 +473,8 @@ def main():
     print(f"\n{'=' * 70}")
     print(f"📋 消融实验汇总结果")
     print(f"{'=' * 70}")
-    print(results_df[['description', 'RMSE', 'MAE', 'MAPE', 'n_params', 'train_time_min']].to_string(index=False))
+    print(results_df[['description', 'RMSE', 'MAE', 'MAPE', 'R2', 'n_params', 'train_time_min']].to_string(index=False))
+
     print(f"\n💾 结果已保存至: {ABLATION_RESULTS_PATH}")
 
 # ======================== 测试 =======================
