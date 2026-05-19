@@ -39,8 +39,6 @@ NUM_MATERIALS = 20                      # 物资数量
 REGIONS = ["A", "B", "C", "D", "E"]     # 区域列表
 PROJECTS_PER_YEAR = 25                  # 每年项目数量
 
-# 🔧 修改点：因果敏感度系数增强（提升宏观/招标/温度与需求的关联性）
-# 原值: macro=10, bidding=1.5, temp=0.12 → 新值: macro=25, bidding=4.0, temp=0.35
 CAUSAL_SENSITIVITY = {
     'macro_invest_growth': 25.0,
     'bidding_intensity': 4.0,
