@@ -1,0 +1,2366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VMD-CAT-BiLSTM 需求预测项目架构可视化</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --bg2: #0f1424;
+    --bg3: #151b30;
+    --card: #161d35;
+    --card-hover: #1c2545;
+    --border: #253060;
+    --border-light: #2d3a6e;
+    --fg: #e8ecf4;
+    --fg-dim: #8892b0;
+    --fg-muted: #5a6488;
+    --accent: #00e5a0;
+    --accent2: #00b8ff;
+    --accent3: #ff6b9d;
+    --accent4: #ffc857;
+    --accent5: #a78bfa;
+    --glow-accent: rgba(0, 229, 160, 0.15);
+    --glow-accent2: rgba(0, 184, 255, 0.15);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 48px rgba(0,0,0,0.5);
+    --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Noto Sans SC', sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* ====== 背景粒子 ====== */
+  #particles-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* ====== 全局容器 ====== */
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 32px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ====== 导航栏 ====== */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    background: rgba(10, 14, 26, 0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    transition: var(--transition);
+  }
+
+  nav.scrolled {
+    background: rgba(10, 14, 26, 0.95);
+    box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+  }
+
+  .nav-inner {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+  }
+
+  .nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--accent);
+  }
+
+  .nav-brand i { font-size: 22px; }
+
+  .nav-links {
+    display: flex;
+    gap: 8px;
+    list-style: none;
+  }
+
+  .nav-links a {
+    color: var(--fg-dim);
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    transition: var(--transition);
+  }
+
+  .nav-links a:hover, .nav-links a.active {
+    color: var(--accent);
+    background: var(--glow-accent);
+  }
+
+  /* ====== Hero ====== */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 120px 32px 80px;
+    position: relative;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at 30% 20%, rgba(0,229,160,0.08) 0%, transparent 60%),
+                radial-gradient(ellipse at 70% 80%, rgba(0,184,255,0.06) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .hero-content { position: relative; z-index: 1; }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    border-radius: 999px;
+    background: var(--glow-accent);
+    border: 1px solid rgba(0,229,160,0.3);
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 32px;
+    animation: fadeInDown 0.8s ease;
+  }
+
+  .hero h1 {
+    font-size: clamp(36px, 5vw, 72px);
+    font-weight: 900;
+    line-height: 1.15;
+    margin-bottom: 24px;
+    animation: fadeInUp 0.8s ease 0.1s both;
+  }
+
+  .hero h1 .highlight {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero p {
+    font-size: 18px;
+    color: var(--fg-dim);
+    max-width: 700px;
+    margin: 0 auto 48px;
+    animation: fadeInUp 0.8s ease 0.2s both;
+  }
+
+  .hero-stats {
+    display: flex;
+    gap: 48px;
+    justify-content: center;
+    flex-wrap: wrap;
+    animation: fadeInUp 0.8s ease 0.3s both;
+  }
+
+  .hero-stat {
+    text-align: center;
+  }
+
+  .hero-stat .num {
+    font-size: 36px;
+    font-weight: 900;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .hero-stat .label {
+    font-size: 13px;
+    color: var(--fg-muted);
+    margin-top: 4px;
+  }
+
+  /* ====== Section ====== */
+  section {
+    padding: 100px 0;
+    position: relative;
+  }
+
+  .section-header {
+    text-align: center;
+    margin-bottom: 64px;
+  }
+
+  .section-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+
+  .section-title {
+    font-size: clamp(28px, 3.5vw, 42px);
+    font-weight: 900;
+    margin-bottom: 16px;
+  }
+
+  .section-desc {
+    font-size: 16px;
+    color: var(--fg-dim);
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  /* ====== 流水线图 ====== */
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+
+  .pipeline::before {
+    content: '';
+    position: absolute;
+    left: 40px;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, transparent, var(--accent), var(--accent2), var(--accent5), transparent);
+    opacity: 0.4;
+  }
+
+  .pipeline-stage {
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+    padding: 32px 0;
+    position: relative;
+    opacity: 0;
+    transform: translateX(-20px);
+    transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .pipeline-stage.visible {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .stage-marker {
+    flex-shrink: 0;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    position: relative;
+    z-index: 2;
+    border: 2px solid;
+    background: var(--bg);
+  }
+
+  .stage-marker.data { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 30px rgba(0,229,160,0.2); }
+  .stage-marker.feature { border-color: var(--accent2); color: var(--accent2); box-shadow: 0 0 30px rgba(0,184,255,0.2); }
+  .stage-marker.model { border-color: var(--accent3); color: var(--accent3); box-shadow: 0 0 30px rgba(255,107,157,0.2); }
+  .stage-marker.train { border-color: var(--accent4); color: var(--accent4); box-shadow: 0 0 30px rgba(255,200,87,0.2); }
+  .stage-marker.exp { border-color: var(--accent5); color: var(--accent5); box-shadow: 0 0 30px rgba(167,139,250,0.2); }
+
+  .stage-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .stage-title {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .stage-title .badge {
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+  }
+
+  .stage-desc {
+    color: var(--fg-dim);
+    margin-bottom: 20px;
+    font-size: 15px;
+  }
+
+  .module-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .module-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    transition: var(--transition);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .module-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 3px;
+    opacity: 0;
+    transition: var(--transition);
+  }
+
+  .module-card:hover {
+    background: var(--card-hover);
+    border-color: var(--border-light);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow);
+  }
+
+  .module-card:hover::before { opacity: 1; }
+
+  .module-card.data-card::before { background: linear-gradient(90deg, var(--accent), transparent); }
+  .module-card.feature-card::before { background: linear-gradient(90deg, var(--accent2), transparent); }
+  .module-card.model-card::before { background: linear-gradient(90deg, var(--accent3), transparent); }
+  .module-card.train-card::before { background: linear-gradient(90deg, var(--accent4), transparent); }
+  .module-card.exp-card::before { background: linear-gradient(90deg, var(--accent5), transparent); }
+
+  .module-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .module-icon {
+    width: 36px; height: 36px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .module-icon.data-icon { background: rgba(0,229,160,0.12); color: var(--accent); }
+  .module-icon.feature-icon { background: rgba(0,184,255,0.12); color: var(--accent2); }
+  .module-icon.model-icon { background: rgba(255,107,157,0.12); color: var(--accent3); }
+  .module-icon.train-icon { background: rgba(255,200,87,0.12); color: var(--accent4); }
+  .module-icon.exp-icon { background: rgba(167,139,250,0.12); color: var(--accent5); }
+
+  .module-card-title {
+    font-weight: 700;
+    font-size: 15px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .module-card-desc {
+    font-size: 13px;
+    color: var(--fg-dim);
+    line-height: 1.6;
+  }
+
+  .module-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+  }
+
+  .module-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.05);
+    color: var(--fg-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ====== 架构图 ====== */
+  .arch-wrapper {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 48px 32px;
+    overflow-x: auto;
+  }
+
+  .arch-flow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    min-width: 900px;
+  }
+
+  .arch-node {
+    padding: 14px 24px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+    position: relative;
+    border: 1px solid;
+    transition: var(--transition);
+    min-width: 140px;
+  }
+
+  .arch-node:hover {
+    transform: scale(1.05);
+    z-index: 2;
+  }
+
+  .arch-arrow {
+    color: var(--fg-muted);
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .arch-node.n-input { background: rgba(0,229,160,0.08); border-color: rgba(0,229,160,0.3); color: var(--accent); }
+  .arch-node.n-process { background: rgba(0,184,255,0.08); border-color: rgba(0,184,255,0.3); color: var(--accent2); }
+  .arch-node.n-model { background: rgba(255,107,157,0.08); border-color: rgba(255,107,157,0.3); color: var(--accent3); }
+  .arch-node.n-output { background: rgba(167,139,250,0.08); border-color: rgba(167,139,250,0.3); color: var(--accent5); }
+
+  /* ====== 模型架构详细图 ====== */
+  .model-arch {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 48px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .model-arch::before {
+    content: '';
+    position: absolute;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background: radial-gradient(circle at 50% 50%, rgba(0,229,160,0.03) 0%, transparent 50%);
+    pointer-events: none;
+  }
+
+  .model-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .model-row {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .model-block {
+    padding: 16px 28px;
+    border-radius: var(--radius);
+    font-weight: 600;
+    font-size: 14px;
+    text-align: center;
+    border: 1px solid;
+    position: relative;
+    cursor: pointer;
+    transition: var(--transition);
+    min-width: 140px;
+  }
+
+  .model-block:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow);
+  }
+
+  .model-block .sub-text {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--fg-dim);
+    margin-top: 4px;
+  }
+
+  .model-block.b-vmd { background: rgba(0,229,160,0.1); border-color: rgba(0,229,160,0.35); color: var(--accent); }
+  .model-block.b-dae { background: rgba(0,184,255,0.1); border-color: rgba(0,184,255,0.35); color: var(--accent2); }
+  .model-block.b-catcn { background: rgba(255,107,157,0.1); border-color: rgba(255,107,157,0.35); color: var(--accent3); }
+  .model-block.b-bilstm { background: rgba(255,200,87,0.1); border-color: rgba(255,200,87,0.35); color: var(--accent4); }
+  .model-block.b-fusion { background: rgba(167,139,250,0.1); border-color: rgba(167,139,250,0.35); color: var(--accent5); }
+  .model-block.b-output { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.2); color: var(--fg); }
+
+  .connector-v {
+    width: 2px;
+    height: 28px;
+    background: var(--border-light);
+    position: relative;
+  }
+
+  .connector-v::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: -3px;
+    width: 8px; height: 8px;
+    border-right: 2px solid var(--border-light);
+    border-bottom: 2px solid var(--border-light);
+    transform: rotate(45deg);
+  }
+
+  .connector-h {
+    width: 28px;
+    height: 2px;
+    background: var(--border-light);
+  }
+
+  .split-merge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .subnet-row {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    position: relative;
+  }
+
+  .subnet-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .subnet-label {
+    font-size: 11px;
+    color: var(--fg-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .subnet-inner {
+    border: 1px dashed var(--border-light);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .subnet-inner .model-block {
+    min-width: 120px;
+    padding: 10px 18px;
+    font-size: 12px;
+  }
+
+  /* ====== 消融实验 ====== */
+  .ablation-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+
+  .ablation-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ablation-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow);
+    border-color: var(--border-light);
+  }
+
+  .ablation-card.full { border-top: 3px solid var(--accent); }
+  .ablation-card.a1 { border-top: 3px solid var(--accent2); }
+  .ablation-card.a2 { border-top: 3px solid var(--accent3); }
+  .ablation-card.a3 { border-top: 3px solid var(--accent4); }
+  .ablation-card.a4 { border-top: 3px solid var(--accent5); }
+  .ablation-card.a5 { border-top: 3px solid #ff8a65; }
+
+  .ablation-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 8px;
+  }
+
+  .ablation-card.full .ablation-id { background: rgba(0,229,160,0.12); color: var(--accent); }
+  .ablation-card.a1 .ablation-id { background: rgba(0,184,255,0.12); color: var(--accent2); }
+  .ablation-card.a2 .ablation-id { background: rgba(255,107,157,0.12); color: var(--accent3); }
+  .ablation-card.a3 .ablation-id { background: rgba(255,200,87,0.12); color: var(--accent4); }
+  .ablation-card.a4 .ablation-id { background: rgba(167,139,250,0.12); color: var(--accent5); }
+  .ablation-card.a5 .ablation-id { background: rgba(255,138,101,0.12); color: #ff8a65; }
+
+  .ablation-name {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .ablation-detail {
+    font-size: 13px;
+    color: var(--fg-dim);
+    line-height: 1.6;
+  }
+
+  .ablation-remove {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .remove-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(255,107,157,0.1);
+    color: var(--accent3);
+    text-decoration: line-through;
+  }
+
+  .keep-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(0,229,160,0.08);
+    color: var(--accent);
+  }
+
+  /* ====== 基线对比 ====== */
+  .baseline-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  .baseline-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px;
+    transition: var(--transition);
+    position: relative;
+  }
+
+  .baseline-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow);
+    border-color: var(--border-light);
+  }
+
+  .baseline-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .baseline-icon {
+    width: 44px; height: 44px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+  }
+
+  .baseline-name {
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .baseline-type {
+    font-size: 12px;
+    color: var(--fg-muted);
+  }
+
+  .baseline-features {
+    font-size: 13px;
+    color: var(--fg-dim);
+    line-height: 1.8;
+  }
+
+  .baseline-features li {
+    padding-left: 4px;
+  }
+
+  .baseline-features li::marker {
+    color: var(--accent);
+  }
+
+  /* ====== 数据流图 ====== */
+  .dataflow-container {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 48px 32px;
+    overflow-x: auto;
+  }
+
+  .dataflow-svg {
+    width: 100%;
+    min-width: 900px;
+  }
+
+  /* ====== 详情面板 ====== */
+  .detail-panel {
+    position: fixed;
+    top: 0; right: -500px;
+    width: 460px;
+    height: 100vh;
+    background: var(--bg2);
+    border-left: 1px solid var(--border);
+    z-index: 200;
+    padding: 32px;
+    overflow-y: auto;
+    transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -8px 0 40px rgba(0,0,0,0.4);
+  }
+
+  .detail-panel.open { right: 0; }
+
+  .detail-close {
+    position: absolute;
+    top: 16px; right: 16px;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--fg-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+  }
+
+  .detail-close:hover {
+    background: var(--card-hover);
+    color: var(--fg);
+  }
+
+  .detail-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    padding-right: 40px;
+  }
+
+  .detail-path {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--fg-muted);
+    margin-bottom: 20px;
+  }
+
+  .detail-section {
+    margin-bottom: 24px;
+  }
+
+  .detail-section h4 {
+    font-size: 13px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+  }
+
+  .detail-section p, .detail-section li {
+    font-size: 14px;
+    color: var(--fg-dim);
+    line-height: 1.8;
+  }
+
+  .detail-section ul {
+    padding-left: 20px;
+  }
+
+  .detail-io {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .io-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+  }
+
+  .io-box h5 {
+    font-size: 11px;
+    color: var(--fg-muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .io-box p {
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--fg-dim);
+    line-height: 1.6;
+  }
+
+  /* ====== 遮罩 ====== */
+  .overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 199;
+    opacity: 0;
+    pointer-events: none;
+    transition: var(--transition);
+  }
+
+  .overlay.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* ====== 代码块 ====== */
+  .code-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--fg-dim);
+    overflow-x: auto;
+    line-height: 1.8;
+  }
+
+  .code-keyword { color: var(--accent3); }
+  .code-string { color: var(--accent); }
+  .code-comment { color: var(--fg-muted); }
+  .code-type { color: var(--accent2); }
+
+  /* ====== 参数配置表 ====== */
+  .config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+
+  .config-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .config-section-header {
+    padding: 14px 20px;
+    font-weight: 700;
+    font-size: 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .config-rows {
+    padding: 8px 0;
+  }
+
+  .config-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 20px;
+    font-size: 13px;
+    transition: var(--transition);
+  }
+
+  .config-row:hover {
+    background: rgba(255,255,255,0.02);
+  }
+
+  .config-key {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--fg-dim);
+  }
+
+  .config-val {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* ====== Footer ====== */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 40px 0;
+    text-align: center;
+    color: var(--fg-muted);
+    font-size: 13px;
+  }
+
+  /* ====== 动画 ====== */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  @keyframes flowLine {
+    0% { stroke-dashoffset: 20; }
+    100% { stroke-dashoffset: 0; }
+  }
+
+  .animate-in {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .animate-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ====== 响应式 ====== */
+  @media (max-width: 768px) {
+    .container { padding: 0 16px; }
+    .nav-links { display: none; }
+    .pipeline::before { left: 24px; }
+    .stage-marker { width: 48px; height: 48px; font-size: 18px; }
+    .module-grid { grid-template-columns: 1fr; }
+    .baseline-row { grid-template-columns: 1fr; }
+    .ablation-grid { grid-template-columns: 1fr; }
+    .detail-panel { width: 100%; right: -100%; }
+    .hero-stats { gap: 24px; }
+    .hero-stat .num { font-size: 28px; }
+  }
+
+  /* ====== 滚动条 ====== */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+  /* ====== 流程SVG ====== */
+  .flow-svg text {
+    font-family: 'Noto Sans SC', sans-serif;
+  }
+</style>
+<base target="_blank">
+</head>
+<body>
+
+<canvas id="particles-canvas"></canvas>
+
+<!-- 导航栏 -->
+<nav id="navbar">
+  <div class="nav-inner">
+    <div class="nav-brand">
+      <i class="fas fa-bolt"></i>
+      <span>VMD-CAT-BiLSTM</span>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#hero" class="active">首页</a></li>
+      <li><a href="#pipeline">数据流水线</a></li>
+      <li><a href="#architecture">模型架构</a></li>
+      <li><a href="#model-detail">模型详解</a></li>
+      <li><a href="#ablation">消融实验</a></li>
+      <li><a href="#baselines">基线对比</a></li>
+      <li><a href="#config">参数配置</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- 遮罩 -->
+<div class="overlay" id="overlay"></div>
+
+<!-- 详情面板 -->
+<div class="detail-panel" id="detailPanel">
+  <button class="detail-close" id="detailClose"><i class="fas fa-times"></i></button>
+  <div id="detailContent"></div>
+</div>
+
+<!-- Hero -->
+<section class="hero" id="hero">
+  <div class="hero-content">
+    <div class="hero-badge">
+      <i class="fas fa-diagram-project"></i>
+      电网物资需求预测系统
+    </div>
+    <h1>
+      <span class="highlight">VMD-CAT-BiLSTM</span><br>
+      深度学习需求预测架构
+    </h1>
+    <p>
+      基于变分模态分解、通道注意力时域卷积网络与时间注意力双向LSTM的电网物资需求预测框架，
+      融合去噪自编码器特征降维与门控融合机制，实现高精度多尺度时序预测。
+    </p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="num" data-target="20">0</div>
+        <div class="label">模块文件</div>
+      </div>
+      <div class="hero-stat">
+        <div class="num" data-target="5">0</div>
+        <div class="label">消融变体</div>
+      </div>
+      <div class="hero-stat">
+        <div class="num" data-target="3">0</div>
+        <div class="label">基线模型</div>
+      </div>
+      <div class="hero-stat">
+        <div class="num" data-target="7">0</div>
+        <div class="label">核心组件</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 数据流水线 -->
+<section id="pipeline">
+  <div class="container">
+    <div class="section-header animate-in">
+      <div class="section-tag"><i class="fas fa-stream"></i> PIPELINE</div>
+      <h2 class="section-title">端到端数据流水线</h2>
+      <p class="section-desc">从原始数据仿真到模型训练评估的完整流程，严格遵循时间顺序避免信息泄漏</p>
+    </div>
+
+    <div class="pipeline">
+      <!-- 阶段1: 数据生成 -->
+      <div class="pipeline-stage">
+        <div class="stage-marker data"><i class="fas fa-database"></i></div>
+        <div class="stage-content">
+          <div class="stage-title">
+            数据生成与预处理
+            <span class="badge" style="background:rgba(0,229,160,0.12);color:var(--accent);">Phase 1</span>
+          </div>
+          <p class="stage-desc">日度仿真→月度聚合策略，生成符合业务规律的电网物资需求数据，经VMD分解、清洗归一化后输出标准化训练集。</p>
+          <div class="module-grid">
+            <div class="module-card data-card" data-detail="generate">
+              <div class="module-card-header">
+                <div class="module-icon data-icon"><i class="fas fa-flask"></i></div>
+                <div class="module-card-title">generate_data.py</div>
+              </div>
+              <div class="module-card-desc">日度仿真引擎：模拟20种物资5区域需求，含项目脉冲/连续消耗/零星随机三种模式，月度聚合后注入缺失与异常。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">日度仿真</span>
+                <span class="module-tag">BOM联动</span>
+                <span class="module-tag">因果调制</span>
+              </div>
+            </div>
+            <div class="module-card data-card" data-detail="preprocess">
+              <div class="module-card-header">
+                <div class="module-icon data-icon"><i class="fas fa-broom"></i></div>
+                <div class="module-card-title">preprocess.py</div>
+              </div>
+              <div class="module-card-desc">数据清洗+VMD分解+归一化：仅在训练集拟合VMD/缩尾分位数，验证测试集通过AR外推，杜绝信息泄漏。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">VMD分解</span>
+                <span class="module-tag">AR外推</span>
+                <span class="module-tag">MinMax归一化</span>
+              </div>
+            </div>
+            <div class="module-card data-card" data-detail="dataset">
+              <div class="module-card-header">
+                <div class="module-icon data-icon"><i class="fas fa-table"></i></div>
+                <div class="module-card-title">dataset.py</div>
+              </div>
+              <div class="module-card-desc">PyTorch数据集：支持4种数据模式(vmd_dae/no_vmd/no_vmd_raw/no_dae)，滑动窗口生成样本对，自动识别IMF与特征列。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">GridMaterialDataset</span>
+                <span class="module-tag">DataLoader</span>
+                <span class="module-tag">4种模式</span>
+              </div>
+            </div>
+            <div class="module-card data-card" data-detail="diagnose_data">
+              <div class="module-card-header">
+                <div class="module-icon data-icon"><i class="fas fa-stethoscope"></i></div>
+                <div class="module-card-title">diagnose_data.py</div>
+              </div>
+              <div class="module-card-desc">数据质量诊断：零需求比例、需求分布、特征-需求斯皮尔曼相关性、自相关性、缺失值比例检查。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">相关性诊断</span>
+                <span class="module-tag">ADF检验</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 阶段2: 特征工程 -->
+      <div class="pipeline-stage">
+        <div class="stage-marker feature"><i class="fas fa-filter"></i></div>
+        <div class="stage-content">
+          <div class="stage-title">
+            特征工程
+            <span class="badge" style="background:rgba(0,184,255,0.12);color:var(--accent2);">Phase 2</span>
+          </div>
+          <p class="stage-desc">双重特征筛选（Spearman+随机森林）→ DAE去噪降维，将高维外部特征压缩为鲁棒低维表示。</p>
+          <div class="module-grid">
+            <div class="module-card feature-card" data-detail="feature_selector">
+              <div class="module-card-header">
+                <div class="module-icon feature-icon"><i class="fas fa-sort-amount-down"></i></div>
+                <div class="module-card-title">feature_selector.py</div>
+              </div>
+              <div class="module-card-desc">双重筛选：Spearman相关性初筛(阈值0.1) + 随机森林重要性精筛(Top-7)，输出selected_features.json。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">Spearman ρ</span>
+                <span class="module-tag">RF Importance</span>
+                <span class="module-tag">Top-N</span>
+              </div>
+            </div>
+            <div class="module-card feature-card" data-detail="dae_encoder">
+              <div class="module-card-header">
+                <div class="module-icon feature-icon"><i class="fas fa-compress-arrows-alt"></i></div>
+                <div class="module-card-title">dae_encoder.py</div>
+              </div>
+              <div class="module-card-desc">去噪自编码器：5维→[16,8]→3维编码+解码重构，加噪训练提升鲁棒性，支持端到端联合优化模式。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">DenoisingAE</span>
+                <span class="module-tag">5→3降维</span>
+                <span class="module-tag">端到端训练</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 阶段3: 模型构建 -->
+      <div class="pipeline-stage">
+        <div class="stage-marker model"><i class="fas fa-cube"></i></div>
+        <div class="stage-content">
+          <div class="stage-title">
+            模型构建
+            <span class="badge" style="background:rgba(255,107,157,0.12);color:var(--accent3);">Phase 3</span>
+          </div>
+          <p class="stage-desc">VMD-CAT-BiLSTM核心模型：VMD多尺度分解 + CA-TCN局部特征 + TA-BiLSTM全局依赖 + 门控融合 + 预测头。</p>
+          <div class="module-grid">
+            <div class="module-card model-card" data-detail="ca_tcn">
+              <div class="module-card-header">
+                <div class="module-icon model-icon"><i class="fas fa-wave-square"></i></div>
+                <div class="module-card-title">ca_tcn.py</div>
+              </div>
+              <div class="module-card-desc">通道注意力TCN：因果空洞卷积保证时序因果性，ECA通道注意力动态调整通道重要性，堆叠4层指数膨胀。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">CausalConv1d</span>
+                <span class="module-tag">ECA-Net</span>
+                <span class="module-tag">残差连接</span>
+              </div>
+            </div>
+            <div class="module-card model-card" data-detail="ta_bilstm">
+              <div class="module-card-header">
+                <div class="module-icon model-icon"><i class="fas fa-brain"></i></div>
+                <div class="module-card-title">ta_bilstm.py</div>
+              </div>
+              <div class="module-card-desc">时间注意力BiLSTM：双向LSTM捕获前后向依赖，时间注意力机制自动识别关键时间步，LayerNorm稳定训练。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">BiLSTM</span>
+                <span class="module-tag">TemporalAttention</span>
+                <span class="module-tag">LayerNorm</span>
+              </div>
+            </div>
+            <div class="module-card model-card" data-detail="fusion">
+              <div class="module-card-header">
+                <div class="module-icon model-icon"><i class="fas fa-code-merge"></i></div>
+                <div class="module-card-title">fusion.py</div>
+              </div>
+              <div class="module-card-desc">门控融合+预测头：Sigmoid门控动态平衡局部/全局特征贡献，多层MLP+Sigmoid输出(0,1)范围预测值。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">GateFusion</span>
+                <span class="module-tag">PredictionHead</span>
+                <span class="module-tag">Sigmoid</span>
+              </div>
+            </div>
+            <div class="module-card model-card" data-detail="vmd_cat_bilstm">
+              <div class="module-card-header">
+                <div class="module-icon model-icon"><i class="fas fa-sitemap"></i></div>
+                <div class="module-card-title">vmd_cat_bilstm.py</div>
+              </div>
+              <div class="module-card-desc">主模型：管理K个SubNet并行处理各IMF，支持参数共享与端到端DAE训练，累加预测值输出最终结果。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">VMDCATBiLSTM</span>
+                <span class="module-tag">SubNet</span>
+                <span class="module-tag">参数共享</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 阶段4: 训练 -->
+      <div class="pipeline-stage">
+        <div class="stage-marker train"><i class="fas fa-dumbbell"></i></div>
+        <div class="stage-content">
+          <div class="stage-title">
+            训练与评估
+            <span class="badge" style="background:rgba(255,200,87,0.12);color:var(--accent4);">Phase 4</span>
+          </div>
+          <p class="stage-desc">完整训练循环：余弦退火学习率、梯度裁剪、早停机制，支持VMD双路与单路两种模型类型，含DAE重构辅助损失。</p>
+          <div class="module-grid">
+            <div class="module-card train-card" data-detail="trainer">
+              <div class="module-card-header">
+                <div class="module-icon train-icon"><i class="fas fa-cogs"></i></div>
+                <div class="module-card-title">trainer.py</div>
+              </div>
+              <div class="module-card-desc">训练管理器：train_one_epoch + validate + calculate_metrics，余弦退火LR，早停，RMSE/MAE/MAPE/R²四指标评估。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">CosineAnnealing</span>
+                <span class="module-tag">EarlyStopping</span>
+                <span class="module-tag">Metrics</span>
+              </div>
+            </div>
+            <div class="module-card train-card" data-detail="train_script">
+              <div class="module-card-header">
+                <div class="module-icon train-icon"><i class="fas fa-play"></i></div>
+                <div class="module-card-title">train.py</div>
+              </div>
+              <div class="module-card-desc">训练入口脚本：检查数据就绪→解析超参→构建DataLoader→初始化模型→启动训练，保存最优权重与训练记录。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">argparse</span>
+                <span class="module-tag">checkpoint</span>
+              </div>
+            </div>
+            <div class="module-card train-card" data-detail="evaluate">
+              <div class="module-card-header">
+                <div class="module-icon train-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="module-card-title">evaluate_model.py</div>
+              </div>
+              <div class="module-card-desc">通用评估函数：支持VMD/Single两种模型类型，统一反归一化，返回指标+真实值+预测值+参数量。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">反归一化</span>
+                <span class="module-tag">n_params</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 阶段5: 实验 -->
+      <div class="pipeline-stage">
+        <div class="stage-marker exp"><i class="fas fa-flask"></i></div>
+        <div class="stage-content">
+          <div class="stage-title">
+            实验验证
+            <span class="badge" style="background:rgba(167,139,250,0.12);color:var(--accent5);">Phase 5</span>
+          </div>
+          <p class="stage-desc">5组消融实验验证各组件贡献 + 3个基线模型公平对比，统一指标评估与结果汇总。</p>
+          <div class="module-grid">
+            <div class="module-card exp-card" data-detail="run_ablation">
+              <div class="module-card-header">
+                <div class="module-icon exp-icon"><i class="fas fa-vials"></i></div>
+                <div class="module-card-title">run_ablation.py</div>
+              </div>
+              <div class="module-card-desc">消融实验统一运行脚本：依次训练Full+A1~A5共6个模型，自动适配端到端DAE模式，汇总指标到CSV。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">6组实验</span>
+                <span class="module-tag">自动汇总</span>
+              </div>
+            </div>
+            <div class="module-card exp-card" data-detail="diagnose_dae">
+              <div class="module-card-header">
+                <div class="module-icon exp-icon"><i class="fas fa-bug"></i></div>
+                <div class="module-card-title">diagnose_dae.py</div>
+              </div>
+              <div class="module-card-desc">DAE诊断工具：独立测试DAE编码器→测试VMDCATBiLSTM forward(use_dae=True)→对比w/o DAE模式。</div>
+              <div class="module-card-tags">
+                <span class="module-tag">维度验证</span>
+                <span class="module-tag">Forward测试</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 架构总览 -->
+<section id="architecture">
+  <div class="container">
+    <div class="section-header animate-in">
+      <div class="section-tag"><i class="fas fa-project-diagram"></i> ARCHITECTURE</div>
+      <h2 class="section-title">系统架构总览</h2>
+      <p class="section-desc">从数据输入到预测输出的完整数据流转路径</p>
+    </div>
+
+    <div class="arch-wrapper animate-in">
+      <div class="arch-flow">
+        <div class="arch-node n-input">
+          <i class="fas fa-file-csv" style="margin-right:6px;"></i>
+          原始CSV<br><small>grid_material_demand_sim.csv</small>
+        </div>
+        <div class="arch-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+        <div class="arch-node n-process">
+          <i class="fas fa-broom" style="margin-right:6px;"></i>
+          数据清洗<br><small>缺失值插补 + 缩尾</small>
+        </div>
+        <div class="arch-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+        <div class="arch-node n-process">
+          <i class="fas fa-wave-square" style="margin-right:6px;"></i>
+          VMD分解<br><small>K=3 IMF分量</small>
+        </div>
+        <div class="arch-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+        <div class="arch-node n-process">
+          <i class="fas fa-balance-scale" style="margin-right:6px;"></i>
+          归一化<br><small>MinMax (train fit)</small>
+        </div>
+        <div class="arch-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+        <div class="arch-node n-process">
+          <i class="fas fa-filter" style="margin-right:6px;"></i>
+          特征筛选<br><small>Spearman + RF</small>
+        </div>
+        <div class="arch-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+        <div class="arch-node n-process">
+          <i class="fas fa-compress-arrows-alt" style="margin-right:6px;"></i>
+          DAE编码<br><small>5维 → 3维</small>
+        </div>
+        <div class="arch-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+        <div class="arch-node n-model">
+          <i class="fas fa-cube" style="margin-right:6px;"></i>
+          VMD-CAT-BiLSTM<br><small>主模型</small>
+        </div>
+        <div class="arch-arrow"><i class="fas fa-long-arrow-alt-right"></i></div>
+        <div class="arch-node n-output">
+          <i class="fas fa-chart-line" style="margin-right:6px;"></i>
+          需求预测<br><small>RMSE/MAE/MAPE/R²</small>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 模型架构详解 -->
+<section id="model-detail">
+  <div class="container">
+    <div class="section-header animate-in">
+      <div class="section-tag"><i class="fas fa-microchip"></i> MODEL DETAIL</div>
+      <h2 class="section-title">VMD-CAT-BiLSTM 模型架构详解</h2>
+      <p class="section-desc">每个IMF分量独立通过SubNet处理，最终累加所有预测值</p>
+    </div>
+
+    <div class="model-arch animate-in">
+      <div class="model-flow">
+        <!-- 输入层 -->
+        <div class="model-row">
+          <div class="model-block b-vmd">
+            <i class="fas fa-wave-square"></i> VMD 分解
+            <div class="sub-text">demand → IMF_1 + IMF_2 + IMF_3</div>
+          </div>
+          <div style="width:24px;"></div>
+          <div class="model-block b-dae">
+            <i class="fas fa-compress-arrows-alt"></i> DAE 编码器
+            <div class="sub-text">5个原始特征 → 3维编码</div>
+          </div>
+        </div>
+
+        <div class="connector-v"></div>
+
+        <!-- IMF拆分 -->
+        <div class="model-row">
+          <div style="font-size:13px;color:var(--fg-muted);font-weight:600;">
+            <i class="fas fa-code-branch"></i> IMF 分量拆分 + 外部特征拼接
+          </div>
+        </div>
+
+        <div class="connector-v"></div>
+
+        <!-- SubNet并行 -->
+        <div class="subnet-row">
+          <div class="subnet-wrapper">
+            <div class="subnet-label">IMF_1</div>
+            <div class="subnet-inner">
+              <div class="model-block b-catcn" style="min-width:100px;padding:8px 14px;font-size:11px;">
+                CA-TCN
+                <div class="sub-text">局部特征</div>
+              </div>
+              <div style="font-size:10px;color:var(--fg-muted);">↓</div>
+              <div class="model-block b-bilstm" style="min-width:100px;padding:8px 14px;font-size:11px;">
+                TA-BiLSTM
+                <div class="sub-text">全局特征</div>
+              </div>
+              <div style="font-size:10px;color:var(--fg-muted);">↓</div>
+              <div class="model-block b-fusion" style="min-width:100px;padding:8px 14px;font-size:11px;">
+                GateFusion
+                <div class="sub-text">门控融合</div>
+              </div>
+              <div style="font-size:10px;color:var(--fg-muted);">↓</div>
+              <div class="model-block b-output" style="min-width:100px;padding:8px 14px;font-size:11px;">
+                PredHead
+                <div class="sub-text">ŷ₁</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="subnet-wrapper">
+            <div class="subnet-label">IMF_2 (共享SubNet)</div>
+            <div class="subnet-inner">
+              <div class="model-block b-catcn" style="min-width:100px;padding:8px 14px;font-size:11px;">
+                CA-TCN
+                <div class="sub-text">局部特征</div>
+              </div>
+              <div style="font-size:10px;color:var(--fg-muted);">↓</div>
+              <div class="model-block b-bilstm" style="min-width:100px;padding:8px 14px;font-size:11px;">
+                TA-BiLSTM
+                <div class="sub-text">全局特征</div>
+              </div>
+              <div style="font-size:10px;color:var(--fg-muted);">↓</div>
+              <div class="model-block b-fusion" style="min-width:100px;padding:8px 14px;font-size:11px;">
+                GateFusion
+                <div class="sub-text">门控融合</div>
+              </div>
+              <div style="font-size:10px;color:var(--fg-muted);">↓</div>
+              <div class="model-block b-output" style="min-width:100px;padding:8px 14px;font-size:11px;">
+                PredHead
+                <div class="sub-text">ŷ₂</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="subnet-wrapper">
+            <div class="subnet-label">IMF_3 (共享SubNet)</div>
+            <div class="subnet-inner">
+              <div class="model-block b-catcn" style="min-width:100px;padding:8px 14px;font-size:11px;">
+                CA-TCN
+                <div class="sub-text">局部特征</div>
+              </div>
+              <div style="font-size:10px;color:var(--fg-muted);">↓</div>
+              <div class="model-block b-bilstm" style="min-width:100px;padding:8px 14px;font-size:11px;">
+                TA-BiLSTM
+                <div class="sub-text">全局特征</div>
+              </div>
+              <div style="font-size:10px;color:var(--fg-muted);">↓</div>
+              <div class="model-block b-fusion" style="min-width:100px;padding:8px 14px;font-size:11px;">
+                GateFusion
+                <div class="sub-text">门控融合</div>
+              </div>
+              <div style="font-size:10px;color:var(--fg-muted);">↓</div>
+              <div class="model-block b-output" style="min-width:100px;padding:8px 14px;font-size:11px;">
+                PredHead
+                <div class="sub-text">ŷ₃</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="connector-v"></div>
+
+        <!-- 累加输出 -->
+        <div class="model-row">
+          <div class="model-block b-output" style="min-width:240px;">
+            <i class="fas fa-plus-circle"></i> 累加预测：ŷ = ŷ₁ + ŷ₂ + ŷ₃
+            <div class="sub-text">最终需求预测值 (反归一化后为原始尺度)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SubNet内部详细流程 -->
+    <div style="margin-top:48px;">
+      <h3 style="text-align:center;font-size:22px;font-weight:700;margin-bottom:32px;" class="animate-in">
+        SubNet 内部数据流详解
+      </h3>
+      <div class="dataflow-container animate-in">
+        <svg class="dataflow-svg flow-svg" viewBox="0 0 1200 420" xmlns="http://www.w3.org/2000/svg">
+          <!-- 背景网格 -->
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#5a6488"/>
+            </marker>
+            <linearGradient id="gradAccent" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" style="stop-color:#00e5a0;stop-opacity:0.2"/>
+              <stop offset="100%" style="stop-color:#00e5a0;stop-opacity:0"/>
+            </linearGradient>
+          </defs>
+
+          <!-- 输入 -->
+          <rect x="20" y="170" width="140" height="60" rx="8" fill="rgba(0,229,160,0.08)" stroke="rgba(0,229,160,0.3)" stroke-width="1.5"/>
+          <text x="90" y="195" text-anchor="middle" fill="#00e5a0" font-size="13" font-weight="600">输入拼接</text>
+          <text x="90" y="215" text-anchor="middle" fill="#8892b0" font-size="10">[IMF_i, ENC_features]</text>
+
+          <!-- 箭头: 输入→CA-TCN -->
+          <line x1="160" y1="200" x2="220" y2="200" stroke="#5a6488" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <text x="190" y="192" text-anchor="middle" fill="#5a6488" font-size="9">(B, T, D_in)</text>
+
+          <!-- CA-TCN -->
+          <rect x="220" y="140" width="180" height="120" rx="8" fill="rgba(255,107,157,0.08)" stroke="rgba(255,107,157,0.3)" stroke-width="1.5"/>
+          <text x="310" y="168" text-anchor="middle" fill="#ff6b9d" font-size="14" font-weight="700">CA-TCN</text>
+          <text x="310" y="190" text-anchor="middle" fill="#8892b0" font-size="10">InputProj → 4×TemporalBlock</text>
+          <text x="310" y="208" text-anchor="middle" fill="#8892b0" font-size="10">→ OutputProj</text>
+          <rect x="240" y="220" width="60" height="24" rx="4" fill="rgba(255,107,157,0.1)"/>
+          <text x="270" y="236" text-anchor="middle" fill="#ff6b9d" font-size="9">ECA-Net</text>
+          <rect x="310" y="220" width="70" height="24" rx="4" fill="rgba(255,107,157,0.1)"/>
+          <text x="345" y="236" text-anchor="middle" fill="#ff6b9d" font-size="9">CausalConv</text>
+
+          <!-- 箭头: CA-TCN→分叉 -->
+          <line x1="400" y1="200" x2="460" y2="200" stroke="#5a6488" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <text x="430" y="192" text-anchor="middle" fill="#5a6488" font-size="9">(B, T, 8)</text>
+
+          <!-- 分叉点 -->
+          <circle cx="470" cy="200" r="4" fill="#5a6488"/>
+
+          <!-- 上路: 局部特征 -->
+          <line x1="470" y1="200" x2="470" y2="100" stroke="#5a6488" stroke-width="1.5"/>
+          <line x1="470" y1="100" x2="530" y2="100" stroke="#5a6488" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+          <rect x="530" y="75" width="160" height="50" rx="8" fill="rgba(0,229,160,0.08)" stroke="rgba(0,229,160,0.3)" stroke-width="1.5"/>
+          <text x="610" y="97" text-anchor="middle" fill="#00e5a0" font-size="12" font-weight="600">AdaptiveAvgPool1d</text>
+          <text x="610" y="115" text-anchor="middle" fill="#8892b0" font-size="10">序列→向量 f_local</text>
+
+          <!-- 下路: 全局特征 -->
+          <line x1="470" y1="200" x2="470" y2="300" stroke="#5a6488" stroke-width="1.5"/>
+          <line x1="470" y1="300" x2="530" y2="300" stroke="#5a6488" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+          <rect x="530" y="265" width="160" height="70" rx="8" fill="rgba(255,200,87,0.08)" stroke="rgba(255,200,87,0.3)" stroke-width="1.5"/>
+          <text x="610" y="290" text-anchor="middle" fill="#ffc857" font-size="13" font-weight="700">TA-BiLSTM</text>
+          <text x="610" y="308" text-anchor="middle" fill="#8892b0" font-size="10">BiLSTM → LayerNorm</text>
+          <text x="610" y="324" text-anchor="middle" fill="#8892b0" font-size="10">→ TemporalAttention → f_global</text>
+
+          <!-- 箭头: Pool→Fusion -->
+          <line x1="690" y1="100" x2="770" y2="100" stroke="#5a6488" stroke-width="1.5"/>
+          <line x1="770" y1="100" x2="770" y2="190" stroke="#5a6488" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <text x="740" y="92" text-anchor="middle" fill="#5a6488" font-size="9">(B, 8)</text>
+
+          <!-- 箭头: TA-BiLSTM→Fusion -->
+          <line x1="690" y1="300" x2="770" y2="300" stroke="#5a6488" stroke-width="1.5"/>
+          <line x1="770" y1="300" x2="770" y2="220" stroke="#5a6488" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <text x="740" y="295" text-anchor="middle" fill="#5a6488" font-size="9">(B, 32)</text>
+
+          <!-- GateFusion -->
+          <rect x="720" y="170" width="160" height="70" rx="8" fill="rgba(167,139,250,0.08)" stroke="rgba(167,139,250,0.3)" stroke-width="1.5"/>
+          <text x="800" y="195" text-anchor="middle" fill="#a78bfa" font-size="13" font-weight="700">GateFusion</text>
+          <text x="800" y="213" text-anchor="middle" fill="#8892b0" font-size="10">σ(W·[f_local; f_global])</text>
+          <text x="800" y="230" text-anchor="middle" fill="#8892b0" font-size="10">gate·f_local + (1-gate)·f_global</text>
+
+          <!-- 箭头: Fusion→PredHead -->
+          <line x1="880" y1="205" x2="940" y2="205" stroke="#5a6488" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <text x="910" y="197" text-anchor="middle" fill="#5a6488" font-size="9">(B, 16)</text>
+
+          <!-- PredictionHead -->
+          <rect x="940" y="170" width="160" height="70" rx="8" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+          <text x="1020" y="195" text-anchor="middle" fill="#e8ecf4" font-size="13" font-weight="700">PredictionHead</text>
+          <text x="1020" y="213" text-anchor="middle" fill="#8892b0" font-size="10">FC→BN→ReLU→Drop→FC</text>
+          <text x="1020" y="230" text-anchor="middle" fill="#8892b0" font-size="10">→Sigmoid → ŷ_i ∈ (0,1)</text>
+
+          <!-- 箭头: PredHead→输出 -->
+          <line x1="1100" y1="205" x2="1150" y2="205" stroke="#5a6488" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+          <!-- 输出 -->
+          <rect x="1120" y="185" width="60" height="40" rx="8" fill="rgba(0,229,160,0.15)" stroke="rgba(0,229,160,0.4)" stroke-width="1.5"/>
+          <text x="1150" y="210" text-anchor="middle" fill="#00e5a0" font-size="14" font-weight="700">ŷ_i</text>
+
+          <!-- 注意力权重输出 -->
+          <line x1="610" y1="335" x2="610" y2="380" stroke="#ffc857" stroke-width="1" stroke-dasharray="4,3"/>
+          <text x="610" y="400" text-anchor="middle" fill="#ffc857" font-size="10">注意力权重 (B, T)</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 消融实验 -->
+<section id="ablation">
+  <div class="container">
+    <div class="section-header animate-in">
+      <div class="section-tag"><i class="fas fa-vials"></i> ABLATION</div>
+      <h2 class="section-title">消融实验设计</h2>
+      <p class="section-desc">逐一移除核心组件，验证每个模块对预测性能的贡献</p>
+    </div>
+
+    <div class="ablation-grid animate-in">
+      <div class="ablation-card full">
+        <div class="ablation-id">Full Model</div>
+        <div class="ablation-name">VMD-CAT-BiLSTM</div>
+        <div class="ablation-detail">完整模型基线，含全部组件：VMD分解、CA-TCN、TA-BiLSTM、GateFusion、DAE端到端编码。</div>
+        <div class="ablation-remove">
+          <span class="keep-tag">VMD</span>
+          <span class="keep-tag">CA</span>
+          <span class="keep-tag">TA</span>
+          <span class="keep-tag">GateFusion</span>
+          <span class="keep-tag">DAE</span>
+        </div>
+      </div>
+
+      <div class="ablation-card a1">
+        <div class="ablation-id">A1</div>
+        <div class="ablation-name">w/o VMD</div>
+        <div class="ablation-detail">去掉VMD分解，原始demand序列直接输入单分支网络，含容量补偿（隐藏维度×2.0，TCN+2层）。</div>
+        <div class="ablation-remove">
+          <span class="remove-tag">VMD</span>
+          <span class="keep-tag">CA</span>
+          <span class="keep-tag">TA</span>
+          <span class="keep-tag">GateFusion</span>
+          <span class="keep-tag">DAE</span>
+        </div>
+      </div>
+
+      <div class="ablation-card a2">
+        <div class="ablation-id">A2</div>
+        <div class="ablation-name">w/o CA</div>
+        <div class="ablation-detail">去掉ECA通道注意力，CA-TCN退化为普通TCN（仅因果空洞卷积+残差连接），验证通道注意力的贡献。</div>
+        <div class="ablation-remove">
+          <span class="keep-tag">VMD</span>
+          <span class="remove-tag">CA (ECA)</span>
+          <span class="keep-tag">TA</span>
+          <span class="keep-tag">GateFusion</span>
+          <span class="keep-tag">DAE</span>
+        </div>
+      </div>
+
+      <div class="ablation-card a3">
+        <div class="ablation-id">A3</div>
+        <div class="ablation-name">w/o TA</div>
+        <div class="ablation-detail">去掉时间注意力，TA-BiLSTM退化为普通BiLSTM（取末步隐藏状态），验证时间注意力的贡献。</div>
+        <div class="ablation-remove">
+          <span class="keep-tag">VMD</span>
+          <span class="keep-tag">CA</span>
+          <span class="remove-tag">TA</span>
+          <span class="keep-tag">GateFusion</span>
+          <span class="keep-tag">DAE</span>
+        </div>
+      </div>
+
+      <div class="ablation-card a4">
+        <div class="ablation-id">A4</div>
+        <div class="ablation-name">w/o GateFusion</div>
+        <div class="ablation-detail">门控融合替换为简单拼接（ConcatFusion：投影→拼接→线性映射），验证自适应门控的优越性。</div>
+        <div class="ablation-remove">
+          <span class="keep-tag">VMD</span>
+          <span class="keep-tag">CA</span>
+          <span class="keep-tag">TA</span>
+          <span class="remove-tag">GateFusion</span>
+          <span class="keep-tag">DAE</span>
+        </div>
+      </div>
+
+      <div class="ablation-card a5">
+        <div class="ablation-id">A5</div>
+        <div class="ablation-name">w/o DAE</div>
+        <div class="ablation-detail">去掉DAE编码，直接使用5维原始外部特征代替3维DAE编码特征，验证特征降维与去噪的贡献。</div>
+        <div class="ablation-remove">
+          <span class="keep-tag">VMD</span>
+          <span class="keep-tag">CA</span>
+          <span class="keep-tag">TA</span>
+          <span class="keep-tag">GateFusion</span>
+          <span class="remove-tag">DAE</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 基线对比 -->
+<section id="baselines">
+  <div class="container">
+    <div class="section-header animate-in">
+      <div class="section-tag"><i class="fas fa-balance-scale"></i> BASELINES</div>
+      <h2 class="section-title">基线模型对比</h2>
+      <p class="section-desc">经典统计方法与机器学习方法，使用相同数据划分与评估指标确保公平对比</p>
+    </div>
+
+    <div class="baseline-row animate-in">
+      <div class="baseline-card">
+        <div class="baseline-header">
+          <div class="baseline-icon" style="background:rgba(0,184,255,0.12);color:var(--accent2);">
+            <i class="fas fa-chart-area"></i>
+          </div>
+          <div>
+            <div class="baseline-name">ARIMA / SARIMA</div>
+            <div class="baseline-type">经典统计方法</div>
+          </div>
+        </div>
+        <ul class="baseline-features">
+          <li>支持自动寻阶（pmdarima.auto_arima）</li>
+          <li>滚动预测：逐步加入真实值重训</li>
+          <li>ADF平稳性检验 + AIC/BIC信息准则</li>
+          <li>季节性扩展：SARIMA(p,d,q)(P,D,Q,12)</li>
+          <li>直接使用原始需求序列（无需特征）</li>
+        </ul>
+      </div>
+
+      <div class="baseline-card">
+        <div class="baseline-header">
+          <div class="baseline-icon" style="background:rgba(255,200,87,0.12);color:var(--accent4);">
+            <i class="fas fa-network-wired"></i>
+          </div>
+          <div>
+            <div class="baseline-name">LSTM</div>
+            <div class="baseline-type">深度学习基线</div>
+          </div>
+        </div>
+        <ul class="baseline-features">
+          <li>2层LSTM + 全连接输出层</li>
+          <li>滑动窗口输入，支持外部特征</li>
+          <li>AdamW优化 + ReduceLROnPlateau</li>
+          <li>梯度裁剪(max_norm=1.0)防爆炸</li>
+          <li>Sigmoid激活约束输出范围</li>
+        </ul>
+      </div>
+
+      <div class="baseline-card">
+        <div class="baseline-header">
+          <div class="baseline-icon" style="background:rgba(167,139,250,0.12);color:var(--accent5);">
+            <i class="fas fa-tree"></i>
+          </div>
+          <div>
+            <div class="baseline-name">XGBoost</div>
+            <div class="baseline-type">梯度提升树</div>
+          </div>
+        </div>
+        <ul class="baseline-features">
+          <li>丰富特征工程：lag/差分/滚动统计/时间特征</li>
+          <li>超参数网格搜索（max_depth/lr/n_estimators）</li>
+          <li>早停 + 验证集RMSE监控</li>
+          <li>特征重要性分析（Top-N + 类别贡献）</li>
+          <li>需求非负约束：np.maximum(pred, 0)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 参数配置 -->
+<section id="config">
+  <div class="container">
+    <div class="section-header animate-in">
+      <div class="section-tag"><i class="fas fa-sliders-h"></i> CONFIG</div>
+      <h2 class="section-title">核心参数配置</h2>
+      <p class="section-desc">configs/config.py 中定义的全局超参数与路径配置</p>
+    </div>
+
+    <div class="config-grid animate-in">
+      <div class="config-section">
+        <div class="config-section-header" style="color:var(--accent);">
+          <i class="fas fa-wave-square"></i> VMD 分解参数
+        </div>
+        <div class="config-rows">
+          <div class="config-row"><span class="config-key">VMD_ALPHA</span><span class="config-val">500</span></div>
+          <div class="config-row"><span class="config-key">VMD_TAU</span><span class="config-val">0</span></div>
+          <div class="config-row"><span class="config-key">VMD_K</span><span class="config-val">3</span></div>
+          <div class="config-row"><span class="config-key">VMD_DC</span><span class="config-val">0</span></div>
+          <div class="config-row"><span class="config-key">VMD_INIT</span><span class="config-val">0</span></div>
+          <div class="config-row"><span class="config-key">VMD_TOL</span><span class="config-val">1e-7</span></div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-header" style="color:var(--accent2);">
+          <i class="fas fa-filter"></i> 特征工程参数
+        </div>
+        <div class="config-rows">
+          <div class="config-row"><span class="config-key">SPEARMAN_THRESHOLD</span><span class="config-val">0.1</span></div>
+          <div class="config-row"><span class="config-key">TOP_N</span><span class="config-val">7</span></div>
+          <div class="config-row"><span class="config-key">NOISE_STD</span><span class="config-val">0.1</span></div>
+          <div class="config-row"><span class="config-key">DAE_EPOCHS</span><span class="config-val">500</span></div>
+          <div class="config-row"><span class="config-key">DAE_HIDDEN_DIM</span><span class="config-val">[16, 8]</span></div>
+          <div class="config-row"><span class="config-key">RECON_LOSS_WEIGHT</span><span class="config-val">0.1</span></div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-header" style="color:var(--accent3);">
+          <i class="fas fa-cube"></i> 模型参数
+        </div>
+        <div class="config-rows">
+          <div class="config-row"><span class="config-key">TCN_HIDDEN</span><span class="config-val">16</span></div>
+          <div class="config-row"><span class="config-key">TCN_OUTPUT</span><span class="config-val">8</span></div>
+          <div class="config-row"><span class="config-key">LSTM_HIDDEN</span><span class="config-val">16</span></div>
+          <div class="config-row"><span class="config-key">LSTM_LAYERS</span><span class="config-val">2</span></div>
+          <div class="config-row"><span class="config-key">UNIFIED_DIM</span><span class="config-val">16</span></div>
+          <div class="config-row"><span class="config-key">DROPOUT</span><span class="config-val">0.2</span></div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-header" style="color:var(--accent4);">
+          <i class="fas fa-dumbbell"></i> 训练参数
+        </div>
+        <div class="config-rows">
+          <div class="config-row"><span class="config-key">EPOCHS</span><span class="config-val">150</span></div>
+          <div class="config-row"><span class="config-key">LEARNING_RATE</span><span class="config-val">1e-3</span></div>
+          <div class="config-row"><span class="config-key">BATCH_SIZE</span><span class="config-val">16</span></div>
+          <div class="config-row"><span class="config-key">SEQ_LEN</span><span class="config-val">3</span></div>
+          <div class="config-row"><span class="config-key">WEIGHT_DECAY</span><span class="config-val">1e-5</span></div>
+          <div class="config-row"><span class="config-key">PATIENCE</span><span class="config-val">30</span></div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-header" style="color:var(--accent5);">
+          <i class="fas fa-database"></i> 数据划分
+        </div>
+        <div class="config-rows">
+          <div class="config-row"><span class="config-key">TRAIN_RATIO</span><span class="config-val">0.6</span></div>
+          <div class="config-row"><span class="config-key">VAL_RATIO</span><span class="config-val">0.2</span></div>
+          <div class="config-row"><span class="config-key">TEST_RATIO</span><span class="config-val">0.2</span></div>
+          <div class="config-row"><span class="config-key">RANDOM_SEED</span><span class="config-val">42</span></div>
+          <div class="config-row"><span class="config-key">SHARE_SUBNET</span><span class="config-val">True</span></div>
+          <div class="config-row"><span class="config-key">DAE_END_TO_END</span><span class="config-val">True</span></div>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <div class="config-section-header" style="color:var(--fg-dim);">
+          <i class="fas fa-folder-open"></i> 关键路径
+        </div>
+        <div class="config-rows">
+          <div class="config-row"><span class="config-key">SIM_DATASET</span><span class="config-val" style="font-size:10px;">grid_material_demand_sim.csv</span></div>
+          <div class="config-row"><span class="config-key">DATA_DIR</span><span class="config-val" style="font-size:10px;">data/</span></div>
+          <div class="config-row"><span class="config-key">PROCESSED</span><span class="config-val" style="font-size:10px;">data/processed/</span></div>
+          <div class="config-row"><span class="config-key">MODELS</span><span class="config-val" style="font-size:10px;">models/</span></div>
+          <div class="config-row"><span class="config-key">FIGURES</span><span class="config-val" style="font-size:10px;">figures/</span></div>
+          <div class="config-row"><span class="config-key">FEATURES</span><span class="config-val" style="font-size:10px;">data/features/</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <p>VMD-CAT-BiLSTM 电网物资需求预测系统 &mdash; 项目架构可视化文档</p>
+    <p style="margin-top:8px;font-size:11px;color:var(--fg-muted);">
+      基于 PyTorch / vmdpy / scikit-learn / XGBoost / statsmodels 构建
+    </p>
+  </div>
+</footer>
+
+<script>
+// ====== 粒子背景 ======
+(function() {
+  const canvas = document.getElementById('particles-canvas');
+  const ctx = canvas.getContext('2d');
+  let particles = [];
+  const PARTICLE_COUNT = 60;
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  class Particle {
+    constructor() {
+      this.reset();
+    }
+    reset() {
+      this.x = Math.random() * canvas.width;
+      this.y = Math.random() * canvas.height;
+      this.vx = (Math.random() - 0.5) * 0.3;
+      this.vy = (Math.random() - 0.5) * 0.3;
+      this.radius = Math.random() * 1.5 + 0.5;
+      this.alpha = Math.random() * 0.3 + 0.1;
+    }
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+      if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+      if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+    }
+    draw() {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(0, 229, 160, ${this.alpha})`;
+      ctx.fill();
+    }
+  }
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    particles.push(new Particle());
+  }
+
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => { p.update(); p.draw(); });
+
+    // 连线
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 150) {
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `rgba(0, 229, 160, ${0.06 * (1 - dist / 150)})`;
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(animate);
+  }
+
+  // 尊重 prefers-reduced-motion
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  if (!prefersReducedMotion.matches) {
+    animate();
+  }
+})();
+
+// ====== 导航栏滚动效果 ======
+const navbar = document.getElementById('navbar');
+window.addEventListener('scroll', () => {
+  navbar.classList.toggle('scrolled', window.scrollY > 50);
+});
+
+// ====== 导航高亮 ======
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('.nav-links a');
+
+function updateActiveNav() {
+  let current = '';
+  sections.forEach(section => {
+    const sectionTop = section.offsetTop - 100;
+    if (window.scrollY >= sectionTop) {
+      current = section.getAttribute('id');
+    }
+  });
+  navLinks.forEach(link => {
+    link.classList.toggle('active', link.getAttribute('href') === `#${current}`);
+  });
+}
+window.addEventListener('scroll', updateActiveNav);
+
+// ====== 数字递增动画 ======
+function animateNumbers() {
+  document.querySelectorAll('.hero-stat .num').forEach(el => {
+    const target = parseInt(el.dataset.target);
+    let current = 0;
+    const step = Math.max(1, Math.floor(target / 30));
+    const interval = setInterval(() => {
+      current += step;
+      if (current >= target) {
+        current = target;
+        clearInterval(interval);
+      }
+      el.textContent = current;
+    }, 40);
+  });
+}
+
+// ====== 滚动触发动画 ======
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+document.querySelectorAll('.animate-in, .pipeline-stage').forEach(el => {
+  observer.observe(el);
+});
+
+// Hero数字动画
+const heroObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      animateNumbers();
+      heroObserver.disconnect();
+    }
+  });
+}, { threshold: 0.5 });
+heroObserver.observe(document.querySelector('.hero'));
+
+// ====== 详情面板 ======
+const detailPanel = document.getElementById('detailPanel');
+const overlay = document.getElementById('overlay');
+const detailContent = document.getElementById('detailContent');
+const detailClose = document.getElementById('detailClose');
+
+// 模块详情数据
+const moduleDetails = {
+  generate: {
+    title: '数据生成引擎',
+    path: 'src/data/generate_data.py',
+    desc: '电网物资需求仿真数据生成引擎，采用"日度仿真→月度聚合"两阶段策略，保证业务真实性同时适配模型需求。',
+    sections: [
+      {
+        title: '核心策略',
+        items: ['日度仿真：20种物资×5区域，含项目脉冲/连续消耗/零星随机三种需求模式', '月度聚合：汇总日度需求为月度总量', '因果调制：GDP/投资/招标/温度等外部因素通过敏感度系数调制需求', 'BOM联动：物资间关联需求（如变压器→电缆分支箱）', '差异化AR平滑：连续型0.6/项目型0.3/零星型0.05自回归系数']
+      },
+      {
+        title: '输出文件',
+        items: ['grid_material_demand_sim.csv：月度需求+11个外部特征', 'material_monthly/：各物资-区域独立月度序列']
+      }
+    ],
+    io: {
+      input: '随机种子 + 参数配置',
+      output: 'CSV (date, demand, 11 features)'
+    }
+  },
+  preprocess: {
+    title: '数据预处理',
+    path: 'src/data/preprocess.py',
+    desc: '数据清洗、VMD分解、归一化的完整流水线，严格遵循"先划分再处理"原则避免信息泄漏。',
+    sections: [
+      {
+        title: '处理流程',
+        items: ['按时间顺序划分 60%/20%/20%', '清洗：仅用训练集统计量（前向填充+1%-99%缩尾）', 'VMD分解：仅在训练集拟合，AR模型外推到验证/测试集', '残差校正：按方差比例分配，确保 sum(IMFs) = demand', 'MinMax归一化：demand和IMF共享同一缩放器，外部特征独立缩放']
+      },
+      {
+        title: '关键函数',
+        items: ['perform_vmd_train_only(): 训练集VMD分解', 'apply_vmd_to_subset(): AR外推+残差校正', 'apply_residual_correction(): 方差比例残差分配']
+      }
+    ],
+    io: {
+      input: 'raw CSV → clean_data → VMD → normalize',
+      output: 'train/val/test.csv + scaler.pkl'
+    }
+  },
+  dataset: {
+    title: '数据集构建',
+    path: 'src/data/dataset.py',
+    desc: 'PyTorch Dataset类，支持4种数据模式，滑动窗口生成样本对，自动识别IMF与特征列。',
+    sections: [
+      {
+        title: '数据模式',
+        items: [
+          'vmd_dae：IMF_* + ENC_*（DAE编码特征），端到端训练模式',
+          'no_vmd：原始demand + 外部特征，无VMD分解',
+          'no_vmd_raw：原始demand + 原始外部特征，用于NoVMD消融',
+          'no_dae：IMF_* + 原始外部特征（5维），用于w/o DAE消融'
+        ]
+      },
+      {
+        title: '关键方法',
+        items: [
+          '自动识别IMF列（IMF_前缀）与外部特征列',
+          '滑动窗口构造样本对 (seq_len=3)',
+          '支持端到端DAE模式与预训练DAE模式切换'
+        ]
+      }
+    ],
+    io: {
+      input: 'IMF分量 (B,T,K) + 外部特征 (B,T,D)',
+      output: '预测值 (B,) + 注意力权重列表'
+    }
+  },
+  diagnose_data: {
+    title: '数据质量诊断',
+    path: 'src/data/diagnose_data.py',
+    desc: '一键诊断数据质量，输出统计报告与可视化图表，帮助发现数据异常与分布问题。',
+    sections: [
+      {
+        title: '诊断维度',
+        items: ['零需求比例统计（按物资/区域分组）', '需求分布直方图与箱线图', '特征-需求Spearman相关性热力图', '需求自相关函数（ACF）分析', '缺失值比例与模式检查']
+      }
+    ],
+    io: {
+      input: 'train/val/test CSV',
+      output: '诊断报告 + 可视化图表'
+    }
+  },
+  feature_selector: {
+    title: '特征筛选器',
+    path: 'src/features/feature_selector.py',
+    desc: '双重特征筛选策略：先通过Spearman相关性初筛，再通过随机森林重要性精筛，输出最优特征子集。',
+    sections: [
+      {
+        title: '筛选流程',
+        items: ['Spearman相关性：保留 |ρ| > 0.1 的特征', '随机森林：训练RF回归器，按重要性排序取Top-N', '交叉验证：多折验证特征稳定性', '输出JSON：selected_features.json 供下游使用']
+      }
+    ],
+    io: {
+      input: '训练集特征矩阵 + 目标向量',
+      output: 'selected_features.json (Top-7特征列表)'
+    }
+  },
+  dae_encoder: {
+    title: 'DAE去噪自编码器',
+    path: 'src/features/dae_encoder.py',
+    desc: '对筛选后的外部特征进行降噪与降维，将5维原始特征压缩为3维鲁棒低维表示，支持端到端联合训练。',
+    sections: [
+      {
+        title: '网络结构',
+        items: ['Encoder：5 → 16 → 8 → 3（逐层降维）', 'Decoder：3 → 8 → 16 → 5（对称重构）', '加噪训练：输入层添加N(0, 0.1)高斯噪声', '激活函数：中间层ReLU，输出层Sigmoid']
+      },
+      {
+        title: '训练模式',
+        items: ['独立预训练：先训练DAE，再冻结编码器训练主模型', '端到端训练：DAE嵌入主模型，联合优化预测+重构损失', '重构损失权重：RECON_LOSS_WEIGHT = 0.1']
+      }
+    ],
+    io: {
+      input: '5维原始外部特征',
+      output: '3维编码特征 + 5维重构特征'
+    }
+  },
+  ca_tcn: {
+    title: '通道注意力TCN',
+    path: 'src/models/ca_tcn.py',
+    desc: '因果空洞卷积网络结合ECA通道注意力，在严格保证时序因果性的同时，动态调整通道重要性。',
+    sections: [
+      {
+        title: '核心组件',
+        items: ['CausalConv1d：因果卷积确保不偷看未来信息', 'TemporalBlock：空洞卷积+BN+ReLU+Dropout+残差', 'ECA-Net：1D卷积学习通道交互，自适应重校准', '指数膨胀：dilation = 2^i，感受野指数增长']
+      }
+    ],
+    io: {
+      input: '拼接特征 (B, T, D_in)',
+      output: '局部时频特征 (B, T, TCN_OUTPUT)'
+    }
+  },
+  ta_bilstm: {
+    title: '时间注意力BiLSTM',
+    path: 'src/models/ta_bilstm.py',
+    desc: '双向LSTM捕获前后向时序依赖，时间注意力机制自动识别对预测最关键的历史时间步。',
+    sections: [
+      {
+        title: '核心组件',
+        items: ['BiLSTM：双向编码，前向+后向隐藏态拼接', 'LayerNorm：层归一化稳定深层网络训练', 'TemporalAttention：计算时间步注意力权重', '加权求和：按注意力权重聚合所有时间步信息']
+      }
+    ],
+    io: {
+      input: 'TCN输出序列 (B, T, TCN_OUTPUT)',
+      output: '全局时序特征 (B, LSTM_HIDDEN×2) + 注意力权重 (B, T)'
+    }
+  },
+  fusion: {
+    title: '门控融合与预测头',
+    path: 'src/models/fusion.py',
+    desc: '自适应门控机制动态平衡局部时频特征与全局时序特征的贡献，通过MLP预测头输出最终需求值。',
+    sections: [
+      {
+        title: 'GateFusion',
+        items: ['拼接：f_local 与 f_global 拼接', '门控：Sigmoid(W·concat + b) ∈ (0,1)', '融合：gate·f_local + (1-gate)·f_global', '投影：线性层映射到UNIFIED_DIM']
+      },
+      {
+        title: 'PredictionHead',
+        items: ['两层MLP：UNIFIED_DIM → UNIFIED_DIM//2 → 1', 'BatchNorm + ReLU + Dropout 正则化', 'Sigmoid输出：约束预测值在(0,1)归一化范围']
+      }
+    ],
+    io: {
+      input: 'f_local (B, TCN_OUTPUT) + f_global (B, LSTM_HIDDEN×2)',
+      output: '预测值 ŷ ∈ (0,1)'
+    }
+  },
+  vmd_cat_bilstm: {
+    title: 'VMD-CAT-BiLSTM主模型',
+    path: 'src/models/vmd_cat_bilstm.py',
+    desc: '核心预测模型，管理K个并行SubNet分别处理各IMF分量，支持参数共享与端到端DAE训练模式。',
+    sections: [
+      {
+        title: '模型结构',
+        items: ['SubNet：每个IMF独立经过 CA-TCN → TA-BiLSTM → GateFusion → PredHead', '参数共享：share_subnet=True时所有IMF共用同一SubNet', '预测累加：total_pred = Σ pred_i（各IMF预测值之和）', 'DAE集成：use_dae=True时内部嵌入DAE编码器']
+      }
+    ],
+    io: {
+      input: 'IMFs (B, T, K) + Externals (B, T, D_ext)',
+      output: '预测值 (B,) + 注意力权重列表'
+    }
+  },
+  trainer: {
+    title: '训练管理器',
+    path: 'src/models/trainer.py',
+    desc: '完整的训练循环实现，包含学习率调度、早停机制与统一评估函数。',
+    sections: [
+      {
+        title: '训练功能',
+        items: ['train_one_epoch：单 epoch 训练，支持VMD/Single两种模型类型', 'validate：验证集评估，计算损失与指标', 'CosineAnnealingLR：余弦退火学习率调度', 'EarlyStopping：patience=30，验证损失不下降则终止']
+      },
+      {
+        title: '评估指标',
+        items: ['RMSE：均方根误差', 'MAE：平均绝对误差', 'MAPE：平均绝对百分比误差', 'R²：决定系数']
+      }
+    ],
+    io: {
+      input: '模型 + DataLoader + 超参数',
+      output: '训练历史 + 最优模型权重'
+    }
+  },
+  train_script: {
+    title: '训练入口脚本',
+    path: 'scripts/train.py',
+    desc: '主训练入口，负责环境检查、参数解析、模型初始化与训练启动。',
+    sections: [
+      {
+        title: '执行流程',
+        items: ['检查数据就绪：验证train/val/test文件存在性', '解析超参数：argparse读取命令行参数', '构建DataLoader：自动识别数据模式与特征维度', '初始化模型：根据配置创建VMDCATBiLSTM实例', '启动训练：调用trainer.train_model开始训练循环']
+      }
+    ],
+    io: {
+      input: '命令行参数 / 配置文件',
+      output: '最优模型权重 + 训练记录CSV'
+    }
+  },
+  evaluate: {
+    title: '模型评估器',
+    path: 'experiments/evaluate_model.py',
+    desc: '通用评估接口，支持两种模型类型，统一反归一化后计算原始尺度的评估指标。',
+    sections: [
+      {
+        title: '评估流程',
+        items: ['加载最优模型权重', '在测试集上批量预测', '反归一化：MinMaxScaler逆变换到原始需求尺度', '计算四指标：RMSE / MAE / MAPE / R²', '统计参数量：sum(p.numel() for p in model.parameters())']
+      }
+    ],
+    io: {
+      input: '训练好的模型 + 测试集DataLoader',
+      output: '指标字典 + 真实值数组 + 预测值数组'
+    }
+  },
+  run_ablation: {
+    title: '消融实验运行器',
+    path: 'experiments/run_ablation.py',
+    desc: '统一运行Full+A1~A5共6个实验，自动适配端到端DAE模式，汇总指标到CSV。',
+    sections: [
+      {
+        title: '实验流程',
+        items: ['根据DAE_END_TO_END自动选择数据模式和模型参数', '依次训练6个模型，保存训练记录和最优权重', '加载最优模型在测试集评估', '汇总RMSE/MAE/MAPE/R²/参数量/训练时间', '支持--skip_full跳过Full模型（已有结果时）']
+      }
+    ],
+    io: {
+      input: '配置列表 (6个实验)',
+      output: 'ablation_results.csv'
+    }
+  },
+  diagnose_dae: {
+    title: 'DAE诊断工具',
+    path: 'scripts/diagnose_dae.py',
+    desc: '一键诊断DAE编码是否正确工作，含3步测试流程。',
+    sections: [
+      {
+        title: '诊断步骤',
+        items: ['独立测试DAE编码器（维度匹配检查）', '测试VMDCATBiLSTM forward(use_dae=True)', '对比w/o DAE模式运行']
+      }
+    ],
+    io: {
+      input: '虚拟测试数据',
+      output: '控制台诊断报告'
+    }
+  }
+};
+
+// 绑定点击事件
+document.querySelectorAll('.module-card').forEach(card => {
+  card.addEventListener('click', () => {
+    const key = card.dataset.detail;
+    const detail = moduleDetails[key];
+    if (!detail) return;
+
+    let html = `
+      <div class="detail-title">${detail.title}</div>
+      <div class="detail-path"><i class="fas fa-file-code" style="margin-right:6px;"></i>${detail.path}</div>
+      <div class="detail-section">
+        <h4><i class="fas fa-info-circle" style="margin-right:6px;"></i>概述</h4>
+        <p>${detail.desc}</p>
+      </div>
+    `;
+
+    if (detail.sections) {
+      detail.sections.forEach(sec => {
+        html += `<div class="detail-section"><h4><i class="fas fa-list" style="margin-right:6px;"></i>${sec.title}</h4><ul>`;
+        sec.items.forEach(item => {
+          html += `<li>${item}</li>`;
+        });
+        html += '</ul></div>';
+      });
+    }
+
+    if (detail.io) {
+      html += `
+        <div class="detail-section">
+          <h4><i class="fas fa-exchange-alt" style="margin-right:6px;"></i>输入/输出</h4>
+          <div class="detail-io">
+            <div class="io-box"><h5>Input</h5><p>${detail.io.input}</p></div>
+            <div class="io-box"><h5>Output</h5><p>${detail.io.output}</p></div>
+          </div>
+        </div>
+      `;
+    }
+
+    detailContent.innerHTML = html;
+    detailPanel.classList.add('open');
+    overlay.classList.add('open');
+  });
+});
+
+function closeDetail() {
+  detailPanel.classList.remove('open');
+  overlay.classList.remove('open');
+}
+
+detailClose.addEventListener('click', closeDetail);
+overlay.addEventListener('click', closeDetail);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeDetail();
+});
+
+// ====== 平滑滚动 ======
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+  anchor.addEventListener('click', (e) => {
+    e.preventDefault();
+    const target = document.querySelector(anchor.getAttribute('href'));
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+});
+</script>
+</body>
+</html>
