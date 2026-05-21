@@ -25,6 +25,8 @@ DAE_MODEL_FILE_NAME = 'dae_model.pth'
 MODEL_FILE_NAME = 'vmd_cat_bilstm_model.pth'
 # 2.8 训练记录保存文件名
 TRAIN_RECORD_FILE_NAME = 'train_record.csv'
+# 2.9 字体文件名
+FONT_FILE_NAME = 'SimHei.ttf'
 
 # ======================= 3. 数据路径 =======================
 
@@ -57,8 +59,12 @@ DATA_FIGURES_DIR = os.path.join(FIGURES_DIR, 'data')
 MODEL_FILE_PATH = os.path.join(MODELS_DIR, MODEL_FILE_NAME)
 # 3.10 训练记录保存路径
 TRAIN_RECORD_FILE_PATH = os.path.join(DATA_FIGURES_DIR, TRAIN_RECORD_FILE_NAME)
-# 3.11 随机种子
-RANDOM_SEED = 42
+# 3.11 资源文件目录
+RESOURCE_DIR = os.path.join(BASE_DIR, 'assets')
+# 3.11 字体保存路径
+FONT_PATH = os.path.join(RESOURCE_DIR, 'fonts')
+# 3.12 字体文件保存路径
+FONT_FILE_PATH = os.path.join(FONT_PATH, FONT_FILE_NAME)
 
 # ======================== 4. VMD 分解参数 ========================
 
@@ -127,6 +133,8 @@ SHARE_SUBNET = True
 DAE_END_TO_END = True
 # 8.14 DAE重构辅助损失权重
 RECON_LOSS_WEIGHT = 0.1
+# 8.15 随机种子
+RANDOM_SEED = 42
 
 # ======================= 9. 实验相关路径 =======================
 

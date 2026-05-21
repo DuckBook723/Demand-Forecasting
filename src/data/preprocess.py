@@ -238,7 +238,6 @@ def _fit_ar_predict(series: np.ndarray, order: int, n_forecast: int) -> np.ndarr
 
     return predictions
 
-
 def apply_residual_correction(
         demand: np.ndarray,
         imfs: np.ndarray,
@@ -283,7 +282,6 @@ def apply_residual_correction(
     imfs_corrected += final_residual / K
 
     return imfs_corrected
-
 
 def apply_vmd_to_subset(
         subset_demand: np.ndarray,
