@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第二章 模型构建及方法论</title>
+    <script id="MathJax-script" async src="./MathJax-4.1.2/tex-mml-chtml.js"></script>
+    <style>
+        :root {
+            --text-main: #1a1a1a;
+            --text-secondary: #4a4a4a;
+            --border-color: #d1d5db;
+            --bg-code: #f8f9fa;
+            --accent-blue: #1e40af;
+            --accent-indigo: #4338ca;
+            --accent-violet: #6d28d9;
+            --figure-bg: #ffffff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: "Noto Serif SC", "SimSun", "STSong", serif;
+            font-size: 12pt;
+            line-height: 1.8;
+            color: var(--text-main);
+            background: #fff;
+        }
+
+        .paper-container {
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: 25mm 25mm 25mm 25mm;
+            background: white;
+        }
+
+        /* 章节标题 */
+        h1.chapter-title {
+            font-size: 18pt;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 24pt;
+            letter-spacing: 1pt;
+            color: var(--text-main);
+        }
+
+        h2.section-title {
+            font-size: 14pt;
+            font-weight: 700;
+            margin-top: 24pt;
+            margin-bottom: 12pt;
+            color: var(--text-main);
+            border-bottom: 1.5pt solid var(--text-main);
+            padding-bottom: 4pt;
+        }
+
+        h3.subsection-title {
+            font-size: 12pt;
+            font-weight: 700;
+            margin-top: 16pt;
+            margin-bottom: 8pt;
+            color: var(--text-main);
+        }
+
+        p {
+            text-indent: 2em;
+            text-align: justify;
+            margin-bottom: 6pt;
+            orphans: 3; widows: 3;
+        }
+
+        .no-indent { text-indent: 0; }
+
+        /* 公式 */
+        .equation {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 14pt 0;
+            position: relative;
+        }
+        .equation-number {
+            position: absolute;
+            right: 0;
+            font-size: 11pt;
+            color: var(--text-main);
+        }
+        .equation-content {
+            font-size: 11pt;
+            overflow-x: auto;
+        }
+
+        /* 图与表 */
+        figure {
+            margin: 16pt auto;
+            text-align: center;
+            page-break-inside: avoid;
+        }
+        figcaption {
+            font-size: 10.5pt;
+            color: var(--text-secondary);
+            margin-top: 8pt;
+            text-align: center;
+        }
+        figcaption strong {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        /* SVG 图容器 */
+        .svg-figure {
+            background: var(--figure-bg);
+            border: 1pt solid var(--border-color);
+            border-radius: 4pt;
+            padding: 12pt;
+            display: inline-block;
+            max-width: 100%;
+        }
+
+        /* 流程图专用 */
+        .flow-box {
+            fill: #ffffff;
+            stroke: #374151;
+            stroke-width: 1.2;
+        }
+        .flow-box.highlight {
+            fill: #eff6ff;
+            stroke: #1e40af;
+            stroke-width: 1.5;
+        }
+        .flow-box.accent {
+            fill: #f5f3ff;
+            stroke: #6d28d9;
+            stroke-width: 1.5;
+        }
+        .flow-text {
+            font-family: "Noto Serif SC", serif;
+            font-size: 10pt;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            fill: #1f2937;
+        }
+        .flow-text.small {
+            font-size: 8.5pt;
+            fill: #4b5563;
+        }
+        .arrow-line {
+            stroke: #6b7280;
+            stroke-width: 1.2;
+            fill: none;
+            marker-end: url(#arrowhead);
+        }
+        .arrow-line.bold {
+            stroke: #1e40af;
+            stroke-width: 1.8;
+        }
+
+        /* 模块内部结构 */
+        .module-box {
+            fill: #f9fafb;
+            stroke: #d1d5db;
+            stroke-width: 1;
+            rx: 3;
+        }
+        .module-box.core {
+            fill: #eff6ff;
+            stroke: #3b82f6;
+        }
+        .module-box.aux {
+            fill: #f5f3ff;
+            stroke: #8b5cf6;
+        }
+        .module-label {
+            font-family: "Noto Serif SC", serif;
+            font-size: 9pt;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            fill: #374151;
+        }
+
+        /* 表格 */
+        table.academic {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 14pt 0;
+            font-size: 10.5pt;
+            page-break-inside: avoid;
+        }
+        table.academic th, table.academic td {
+            border: 1pt solid var(--border-color);
+            padding: 6pt 8pt;
+            text-align: center;
+        }
+        table.academic th {
+            background: #f3f4f6;
+            font-weight: 600;
+            font-size: 10pt;
+        }
+        table.academic td { background: #fff; }
+
+        .caption-table {
+            font-size: 10.5pt;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-top: 6pt;
+            margin-bottom: 14pt;
+        }
+
+        /* 算法/步骤列表 */
+        .step-list {
+            margin: 10pt 0 10pt 2em;
+            padding-left: 1em;
+        }
+        .step-list li {
+            margin-bottom: 4pt;
+            text-align: justify;
+        }
+
+        /* 强调 */
+        .term {
+            font-weight: 600;
+            color: var(--accent-blue);
+        }
+    </style>
+</head>
+<body>
+<div class="paper-container">
+
+<h1 class="chapter-title">第二章 模型构建及方法论</h1>
+
+<p>本章围绕电网物资月度需求预测任务，系统阐述所提出的 VMD-CAT-BiLSTM-FS 预测框架的构建原理与数学基础。首先，从总体架构出发，梳理数据流与模块间的耦合关系；随后，依次深入剖析变分模态分解（VMD）的信号解耦机制、多方法共识特征筛选（Consensus FS）的降维策略、基于因果空洞卷积的局部时序编码模块（CATCN）、融入时序注意力的双向长短期记忆网络（TA-BiLSTM）、门控融合机制（Gate Fusion）以及残差跳连预测头（Skip Prediction Head）的设计原理与数学表达。各模块的输入输出维度、超参数配置及前向传播公式均给出严格定义，并通过结构化图示予以直观呈现，为后续实验章节奠定方法论基础。</p>
+
+<h2 class="section-title">2.1 总体框架与数据流</h2>
+
+<p>所提框架遵循"分解—筛选—编码—融合—预测"的五级流水线。原始月度需求序列与外生变量首先经 VMD 分解为多个本征模态函数（IMF），与外部宏观、气象及日历特征拼接后构成高维候选特征集；继而通过共识特征筛选模块剔除冗余与弱相关变量，得到精简输入；随后并行送入 CATCN 与 TA-BiLSTM 两支路，分别提取局部敏感模式与全局长程依赖；两支路特征经门控自适应加权融合后，由预测头输出需求残差，并与上一时刻真实需求相加得到最终预测值。整体流程如图 2-1 所示。</p>
+
+<figure id="fig-2-1">
+    <div class="svg-figure">
+        <svg width="640" height="520" viewBox="0 0 640 520" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                    <polygon points="0 0, 8 3, 0 6" fill="#6b7280"/>
+                </marker>
+                <marker id="arrowhead-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                    <polygon points="0 0, 8 3, 0 6" fill="#1e40af"/>
+                </marker>
+            </defs>
+
+            <!-- 输入层 -->
+            <rect x="220" y="10" width="200" height="36" class="flow-box" rx="3"/>
+            <text x="320" y="28" class="flow-text">原始需求序列 + 外部特征</text>
+            <line x1="320" y1="46" x2="320" y2="66" class="arrow-line"/>
+
+            <!-- VMD -->
+            <rect x="230" y="66" width="180" height="36" class="flow-box highlight" rx="3"/>
+            <text x="320" y="84" class="flow-text">VMD 分解 (K=4)</text>
+            <line x1="320" y1="102" x2="320" y2="118" class="arrow-line bold" marker-end="url(#arrowhead-blue)"/>
+
+            <!-- IMF + 外部 -->
+            <rect x="160" y="118" width="320" height="36" class="flow-box" rx="3"/>
+            <text x="320" y="136" class="flow-text">IMF₁~₄ + ΔIMF + ΔDemand + 外部14维 = 24维候选集</text>
+            <line x1="320" y1="154" x2="320" y2="170" class="arrow-line"/>
+
+            <!-- FS -->
+            <rect x="230" y="170" width="180" height="36" class="flow-box highlight" rx="3"/>
+            <text x="320" y="188" class="flow-text">共识特征筛选 (FS)</text>
+            <line x1="320" y1="206" x2="320" y2="222" class="arrow-line bold" marker-end="url(#arrowhead-blue)"/>
+
+            <!-- 16维输入 -->
+            <rect x="240" y="222" width="160" height="30" class="flow-box" rx="3"/>
+            <text x="320" y="237" class="flow-text">16维精简特征序列</text>
+
+            <!-- 分支箭头 -->
+            <line x1="320" y1="252" x2="180" y2="280" class="arrow-line"/>
+            <line x1="320" y1="252" x2="460" y2="280" class="arrow-line"/>
+
+            <!-- CATCN 分支 -->
+            <rect x="80" y="280" width="200" height="50" class="flow-box highlight" rx="3"/>
+            <text x="180" y="298" class="flow-text">CATCN 局部编码</text>
+            <text x="180" y="315" class="flow-text small">因果空洞卷积 + ECA注意力</text>
+            <line x1="180" y1="330" x2="260" y2="370" class="arrow-line"/>
+
+            <!-- BiLSTM 分支 -->
+            <rect x="360" y="280" width="200" height="50" class="flow-box accent" rx="3"/>
+            <text x="460" y="298" class="flow-text">TA-BiLSTM 全局编码</text>
+            <text x="460" y="315" class="flow-text small">双向LSTM + 时序注意力</text>
+            <line x1="460" y1="330" x2="380" y2="370" class="arrow-line"/>
+
+            <!-- Gate Fusion -->
+            <rect x="240" y="370" width="160" height="40" class="flow-box highlight" rx="3"/>
+            <text x="320" y="388" class="flow-text">门控融合 (GateFusion)</text>
+            <text x="320" y="403" class="flow-text small">32维统一表示</text>
+            <line x1="320" y1="410" x2="320" y2="430" class="arrow-line"/>
+
+            <!-- Prediction Head -->
+            <rect x="250" y="430" width="140" height="34" class="flow-box" rx="3"/>
+            <text x="320" y="447" class="flow-text">预测头 (Deep Δ)</text>
+            <line x1="320" y1="464" x2="320" y2="480" class="arrow-line"/>
+
+            <!-- Skip -->
+            <rect x="220" y="480" width="200" height="30" class="flow-box highlight" rx="3"/>
+            <text x="320" y="495" class="flow-text">Deep Δ + Demand[t] → Output</text>
+        </svg>
+    </div>
+    <figcaption><strong>图 2-1</strong> 所提 VMD-CAT-BiLSTM-FS 框架总体数据流</figcaption>
+</figure>
+
+<p>形式化地，记原始月度需求序列为 \( \mathbf{y} = [y_1, y_2, \dots, y_T]^	op \in \mathbb{R}^T \)，外生特征矩阵为 \( \mathbf{X}^{	ext{ext}} \in \mathbb{R}^{T 	imes d_e} \)（其中 \( d_e = 14 \)）。框架的最终预测目标为：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \hat{y}_{t+1} = y_t + \Delta_{	ext{deep}}(\mathbf{H}_t; \Theta),
+        \]
+    </div>
+    <span class="equation-number">(2-1)</span>
+</div>
+
+<p>其中 \( \mathbf{H}_t \in \mathbb{R}^{s 	imes d_{	ext{in}}} \) 为以 \( t \) 时刻结尾的历史窗口特征张量（窗口长度 \( s = 12 \)），\( \Delta_{	ext{deep}}(\cdot; \Theta) \) 为深度网络参数化的残差映射，\( \Theta \) 为全体可学习参数。以下各节依次展开各模块的数学细节。</p>
+
+<h2 class="section-title">2.2 变分模态分解（VMD）</h2>
+
+<h3 class="subsection-title">2.2.1 变分问题构造</h3>
+
+<p>VMD 通过求解约束变分问题，将非平稳需求序列分解为 \( K \) 个具有紧致频谱的本征模态函数（IMF）。设第 \( k \) 个 IMF 为 \( u_k(t) \)，其解析信号通过 Hilbert 变换构造为 \( u_k(t) + \mathrm{j}\, \mathcal{H}[u_k(t)] \)。利用指数混频将其频谱搬移至基带，变分目标为最小化各 IMF 的带宽之和，同时保证重构 fidelity：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \min_{\{u_k\}, \{\omega_k\}} \; \sum_{k=1}^{K} \Big\| \partial_t \Big[ ig( \delta(t) + rac{\mathrm{j}}{\pi t} ig) * u_k(t) \Big] \mathrm{e}^{-\mathrm{j}\omega_k t} \Big\|_2^2
+        \]
+    </div>
+    <span class="equation-number">(2-2)</span>
+</div>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        	ext{s.t.} \quad \sum_{k=1}^{K} u_k(t) = y(t).
+        \]
+    </div>
+    <span class="equation-number">(2-3)</span>
+</div>
+
+<p>其中 \( \omega_k \) 为第 \( k \) 个模态的中心频率，\( \delta(t) \) 为 Dirac 函数，\( * \) 表示卷积运算。引入二次惩罚项 \( lpha \) 与 Lagrange 乘子 \( \lambda(t) \)，得到增广 Lagrange 函数：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \mathcal{L} = lpha \sum_{k=1}^{K} ig\| \partial_t ig[ (\delta + rac{\mathrm{j}}{\pi t}) * u_k ig] \mathrm{e}^{-\mathrm{j}\omega_k t} ig\|_2^2 + ig\| y - \sum_{k} u_k ig\|_2^2 + ig\langle \lambda, y - \sum_{k} u_k ig
+angle.
+        \]
+    </div>
+    <span class="equation-number">(2-4)</span>
+</div>
+
+<h3 class="subsection-title">2.2.2 交替方向乘子法（ADMM）求解</h3>
+
+<p>通过交替更新 \( \hat{u}_k \)、\( \omega_k \) 与 \( \hat{\lambda} \) 实现迭代优化。在频域中，第 \( n+1 \) 步更新规则为：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \hat{u}_k^{n+1}(\omega) = rac{\hat{y}(\omega) - \sum_{i 
+eq k} \hat{u}_i^{n}(\omega) + rac{\hat{\lambda}^{n}(\omega)}{2}}{1 + 2lpha (\omega - \omega_k^{n})^2},
+        \]
+    </div>
+    <span class="equation-number">(2-5)</span>
+</div>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \omega_k^{n+1} = rac{\int_{0}^{\infty} \omega \, |\hat{u}_k^{n+1}(\omega)|^2 \, \mathrm{d}\omega}{\int_{0}^{\infty} |\hat{u}_k^{n+1}(\omega)|^2 \, \mathrm{d}\omega}.
+        \]
+    </div>
+    <span class="equation-number">(2-6)</span>
+</div>
+
+<p>迭代收敛后，得到 \( K \) 个 IMF 分量 \( \{u_k\}_{k=1}^{K} \) 及其中心频率 \( \{\omega_k\} \)。在本研究中，取 \( K = 4 \)，\( lpha = 2000 \)，收敛容差 \( 	au = 10^{-7} \)。分解结果示意如图 2-2 所示。</p>
+
+<figure id="fig-2-2">
+    <div class="svg-figure">
+        <svg width="580" height="260" viewBox="0 0 580 260" xmlns="http://www.w3.org/2000/svg">
+            <!-- 原始信号 -->
+            <rect x="10" y="10" width="120" height="40" class="module-box core" rx="3"/>
+            <text x="70" y="35" class="module-label">原始需求序列 y(t)</text>
+            <line x1="130" y1="30" x2="170" y2="30" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrowhead-blue)"/>
+
+            <!-- VMD 核心 -->
+            <rect x="170" y="10" width="100" height="40" class="module-box core" rx="3"/>
+            <text x="220" y="35" class="module-label">VMD 分解</text>
+
+            <!-- 分支到各IMF -->
+            <line x1="220" y1="50" x2="220" y2="80" stroke="#6b7280" stroke-width="1"/>
+            <line x1="220" y1="80" x2="70" y2="110" stroke="#6b7280" stroke-width="1"/>
+            <line x1="220" y1="80" x2="190" y2="110" stroke="#6b7280" stroke-width="1"/>
+            <line x1="220" y1="80" x2="310" y2="110" stroke="#6b7280" stroke-width="1"/>
+            <line x1="220" y1="80" x2="430" y2="110" stroke="#6b7280" stroke-width="1"/>
+
+            <!-- IMF 盒子 -->
+            <rect x="10" y="110" width="120" height="50" class="module-box" rx="3"/>
+            <text x="70" y="130" class="module-label">IMF₁</text>
+            <text x="70" y="148" class="module-label" style="font-size:8pt; fill:#6b7280;">低频趋势分量</text>
+
+            <rect x="130" y="110" width="120" height="50" class="module-box" rx="3"/>
+            <text x="190" y="130" class="module-label">IMF₂</text>
+            <text x="190" y="148" class="module-label" style="font-size:8pt; fill:#6b7280;">年度周期分量</text>
+
+            <rect x="250" y="110" width="120" height="50" class="module-box" rx="3"/>
+            <text x="310" y="130" class="module-label">IMF₃</text>
+            <text x="310" y="148" class="module-label" style="font-size:8pt; fill:#6b7280;">季节扰动分量</text>
+
+            <rect x="370" y="110" width="120" height="50" class="module-box" rx="3"/>
+            <text x="430" y="130" class="module-label">IMF₄</text>
+            <text x="430" y="148" class="module-label" style="font-size:8pt; fill:#6b7280;">高频噪声分量</text>
+
+            <!-- 合并 -->
+            <line x1="70" y1="160" x2="220" y2="190" stroke="#6b7280" stroke-width="1"/>
+            <line x1="190" y1="160" x2="220" y2="190" stroke="#6b7280" stroke-width="1"/>
+            <line x1="310" y1="160" x2="220" y2="190" stroke="#6b7280" stroke-width="1"/>
+            <line x1="430" y1="160" x2="220" y2="190" stroke="#6b7280" stroke-width="1"/>
+
+            <rect x="150" y="190" width="140" height="36" class="module-box core" rx="3"/>
+            <text x="220" y="208" class="module-label">重构验证</text>
+            <text x="220" y="220" class="module-label" style="font-size:8pt; fill:#6b7280;">Σuₖ ≈ y(t)</text>
+
+            <!-- 右侧特征衍生 -->
+            <line x1="290" y1="208" x2="340" y2="208" stroke="#1e40af" stroke-width="1.5" marker-end="url(#arrowhead-blue)"/>
+            <rect x="340" y="180" width="220" height="56" class="module-box" rx="3"/>
+            <text x="450" y="200" class="module-label">特征衍生</text>
+            <text x="450" y="215" class="module-label" style="font-size:8.5pt; fill:#4b5563;">IMF₁~₄, ΔIMF₁~₄, ΔDemand, Demand</text>
+            <text x="450" y="228" class="module-label" style="font-size:8.5pt; fill:#4b5563;">拼接外部14维 → 24维候选集</text>
+        </svg>
+    </div>
+    <figcaption><strong>图 2-2</strong> VMD 分解与特征衍生流程示意</figcaption>
+</figure>
+
+<h2 class="section-title">2.3 共识特征筛选（Consensus FS）</h2>
+
+<p>分解后的候选特征集维度较高（24维），而月度样本量有限（训练集仅211个样本），直接输入易诱发过拟合。为此，设计四步共识筛选流水线，综合过滤法与包装法的优势，实现降维与去噪。</p>
+
+<h3 class="subsection-title">2.3.1 相关性预筛选</h3>
+
+<p>首先计算各候选特征与目标变量的 Spearman 秩相关系数 \( 
+ho_j \) 及互信息（MI）。设定显著性阈值 \( 	au_1 = 0.05 \)，剔除 \( p 	ext{-value} > 	au_1 \) 且 \( 	ext{MI}_{	ext{norm}} pprox 0 \) 的无关特征：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \mathcal{S}_1 = \{ j \mid 	ext{corr}(\mathbf{x}_j, \mathbf{y}) 	ext{ 显著}, \; 	ext{MI}(\mathbf{x}_j, \mathbf{y}) > arepsilon \}.
+        \]
+    </div>
+    <span class="equation-number">(2-7)</span>
+</div>
+
+<h3 class="subsection-title">2.3.2 多方法排序与 Borda 计数</h3>
+
+<p>对预筛选保留的特征，采用四种独立方法分别评估重要性：Spearman 相关、归一化互信息、随机置换重要性（RF Permutation）及 SHAP 加性解释值。每种方法生成一个排序列表，通过 Borda 计数聚合为共识得分：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        B_j = \sum_{m=1}^{4} (N_m - r_{j,m}),
+        \]
+    </div>
+    <span class="equation-number">(2-8)</span>
+</div>
+
+<p>其中 \( N_m \) 为第 \( m \) 种方法的特征总数，\( r_{j,m} \) 为特征 \( j \) 在该方法中的排序位次。Borda 得分越高，表明该特征跨方法共识度越强。</p>
+
+<h3 class="subsection-title">2.3.3 冗余剪枝与自适应截断</h3>
+
+<p>对 Borda 排序后的特征序列，计算相邻特征间的 Pearson 相关系数矩阵。若一对特征 \( (i, j) \) 满足 \( |
+ho_{ij}| > 	au_2 \)（取 \( 	au_2 = 0.85 \)），则剔除 Borda 得分较低者，以消除多重共线性。最后采用 Kneedle 算法在累计 Borda 得分曲线上检测肘部位置，自适应确定保留维度。经上述流程，24维候选集被压缩至 16维精简输入，记为 \( \mathbf{X}^{	ext{sel}} \in \mathbb{R}^{T 	imes 16} \)。</p>
+
+<figure id="fig-2-3">
+    <div class="svg-figure">
+        <svg width="600" height="160" viewBox="0 0 600 160" xmlns="http://www.w3.org/2000/svg">
+            <!-- Step 1 -->
+            <rect x="10" y="30" width="110" height="60" class="module-box" rx="3"/>
+            <text x="65" y="55" class="module-label">Step 1</text>
+            <text x="65" y="72" class="module-label" style="font-size:8.5pt; fill:#4b5563;">相关性预筛</text>
+            <text x="65" y="85" class="module-label" style="font-size:8pt; fill:#6b7280;">Spearman + MI</text>
+
+            <line x1="120" y1="60" x2="150" y2="60" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+
+            <!-- Step 2 -->
+            <rect x="150" y="30" width="110" height="60" class="module-box" rx="3"/>
+            <text x="205" y="55" class="module-label">Step 2</text>
+            <text x="205" y="72" class="module-label" style="font-size:8.5pt; fill:#4b5563;">多方法排序</text>
+            <text x="205" y="85" class="module-label" style="font-size:8pt; fill:#6b7280;">Borda 计数投票</text>
+
+            <line x1="260" y1="60" x2="290" y2="60" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+
+            <!-- Step 3 -->
+            <rect x="290" y="30" width="110" height="60" class="module-box" rx="3"/>
+            <text x="345" y="55" class="module-label">Step 3</text>
+            <text x="345" y="72" class="module-label" style="font-size:8.5pt; fill:#4b5563;">冗余剪枝</text>
+            <text x="345" y="85" class="module-label" style="font-size:8pt; fill:#6b7280;">Pearson > 0.85</text>
+
+            <line x1="400" y1="60" x2="430" y2="60" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+
+            <!-- Step 4 -->
+            <rect x="430" y="30" width="110" height="60" class="module-box highlight" rx="3"/>
+            <text x="485" y="55" class="module-label">Step 4</text>
+            <text x="485" y="72" class="module-label" style="font-size:8.5pt; fill:#4b5563;">Kneedle截断</text>
+            <text x="485" y="85" class="module-label" style="font-size:8pt; fill:#6b7280;">24维 → 16维</text>
+
+            <!-- 上下标注 -->
+            <text x="65" y="115" text-anchor="middle" font-size="9pt" fill="#6b7280">剔除无关特征</text>
+            <text x="205" y="115" text-anchor="middle" font-size="9pt" fill="#6b7280">跨方法共识排序</text>
+            <text x="345" y="115" text-anchor="middle" font-size="9pt" fill="#6b7280">消除共线性</text>
+            <text x="485" y="115" text-anchor="middle" font-size="9pt" fill="#1e40af" font-weight="600">自适应定维</text>
+        </svg>
+    </div>
+    <figcaption><strong>图 2-3</strong> 共识特征筛选四步流水线</figcaption>
+</figure>
+
+<h2 class="section-title">2.4 因果空洞时序卷积模块（CATCN）</h2>
+
+<p>为捕获需求序列中的局部敏感模式（如春节保供、迎峰度夏等短期冲击），设计基于因果空洞卷积的局部编码器。该模块严格保证时序因果性，即 \( t \) 时刻的输出仅依赖于历史及当前输入，不泄露未来信息。</p>
+
+<h3 class="subsection-title">2.4.1 因果空洞卷积层</h3>
+
+<p>标准一维卷积在边界处存在未来信息泄露。因果卷积通过在输入前端填充 \( (k-1) 	imes d \) 个零值实现因果约束，其中 \( k \) 为卷积核大小，\( d \) 为空洞因子（dilation）。对于第 \( l \) 层、空洞因子为 \( d_l = 2^{l-1} \) 的因果卷积，输出序列第 \( t \) 个元素为：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        (\mathbf{x} *_{d} \mathbf{w})_t = \sum_{m=0}^{k-1} w_m \cdot x_{t - d \cdot m},
+        \]
+    </div>
+    <span class="equation-number">(2-9)</span>
+</div>
+
+<p>其中 \( *_{d} \) 表示空洞卷积算子。感受野随层数指数增长，\( L \) 层后的理论感受野为 \( 1 + (k-1)(2^L - 1) \)。本研究取 \( k = 3 \)，\( L = 2 \)，感受野覆盖 7 个时间步，足以捕捉月度尺度下的季度性局部模式。</p>
+
+<h3 class="subsection-title">2.4.2 时序残差块与 ECA 注意力</h3>
+
+<p>每一时序残差块（Temporal Block）包含两层因果卷积，每层后接批归一化（BN）与 ReLU 激活，并嵌入通道注意力机制。高效通道注意力（ECA）通过一维卷积学习通道间交互，避免全连接带来的参数量膨胀：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \mathbf{a} = \sigmaig( 	ext{Conv1D}_{k_	ext{eca}}(	ext{GAP}(\mathbf{F})) ig) \in \mathbb{R}^{C 	imes 1},
+        \]
+    </div>
+    <span class="equation-number">(2-10)</span>
+</div>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \mathbf{F}' = \mathbf{F} \odot \mathbf{a},
+        \]
+    </div>
+    <span class="equation-number">(2-11)</span>
+</div>
+
+<p>其中 \( \mathbf{F} \in \mathbb{R}^{C 	imes T} \) 为卷积输出特征，\( 	ext{GAP} \) 为全局平均池化，\( k_	ext{eca} = 5 \) 为自适应卷积核尺寸，\( \sigma(\cdot) \) 为 Sigmoid 函数，\( \odot \) 表示通道维度广播乘法。残差连接进一步缓解梯度消失：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \mathbf{F}_{	ext{out}} = 	ext{ReLU}ig( \mathcal{T}(\mathbf{F}_{	ext{in}}) + \mathcal{R}(\mathbf{F}_{	ext{in}}) ig),
+        \]
+    </div>
+    <span class="equation-number">(2-12)</span>
+</div>
+
+<p>其中 \( \mathcal{T}(\cdot) \) 为双层因果卷积网络，\( \mathcal{R}(\cdot) \) 为 \( 1 	imes 1 \) 卷积构成的残差映射。CATCN 整体将 \( d_{	ext{in}} = 16 \) 维输入序列映射为局部特征张量 \( \mathbf{F}^{	ext{local}} \in \mathbb{R}^{s 	imes d_{	ext{cat}}} \)（取 \( d_{	ext{cat}} = 16 \)）。模块结构如图 2-4 所示。</p>
+
+<figure id="fig-2-4">
+    <div class="svg-figure">
+        <svg width="540" height="340" viewBox="0 0 540 340" xmlns="http://www.w3.org/2000/svg">
+            <!-- 输入 -->
+            <rect x="190" y="10" width="160" height="36" class="module-box" rx="3"/>
+            <text x="270" y="28" class="module-label">输入 (16-dim × s)</text>
+            <text x="270" y="40" class="module-label" style="font-size:8pt; fill:#6b7280;">线性投影至 hidden=32</text>
+            <line x1="270" y1="46" x2="270" y2="62" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+
+            <!-- Layer 1 -->
+            <rect x="130" y="62" width="280" height="56" class="module-box core" rx="3"/>
+            <text x="270" y="82" class="module-label">Layer 1: CausalConv (dilation=1, k=3)</text>
+            <text x="270" y="98" class="module-label" style="font-size:8.5pt; fill:#4b5563;">+ BN + ReLU + Dropout(0.3)</text>
+            <line x1="270" y1="118" x2="270" y2="134" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+
+            <!-- Layer 2 -->
+            <rect x="130" y="134" width="280" height="56" class="module-box core" rx="3"/>
+            <text x="270" y="154" class="module-label">Layer 2: CausalConv (dilation=2, k=3)</text>
+            <text x="270" y="170" class="module-label" style="font-size:8.5pt; fill:#4b5563;">+ BN + ReLU + Dropout(0.3)</text>
+
+            <!-- 残差连接 -->
+            <path d="M 130 90 Q 80 90 80 162 Q 80 162 130 162" fill="none" stroke="#9ca3af" stroke-width="1" stroke-dasharray="4,2"/>
+            <text x="95" y="130" font-size="8pt" fill="#6b7280" text-anchor="middle">1×1</text>
+            <text x="95" y="142" font-size="8pt" fill="#6b7280" text-anchor="middle">残差</text>
+
+            <!-- ECA -->
+            <line x1="270" y1="190" x2="270" y2="206" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+            <rect x="170" y="206" width="200" height="44" class="module-box aux" rx="3"/>
+            <text x="270" y="224" class="module-label">ECA 通道注意力</text>
+            <text x="270" y="240" class="module-label" style="font-size:8.5pt; fill:#4b5563;">GAP → Conv1D₅ → Sigmoid → 通道加权</text>
+
+            <!-- 输出 -->
+            <line x1="270" y1="250" x2="270" y2="270" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+            <rect x="180" y="270" width="180" height="36" class="module-box" rx="3"/>
+            <text x="270" y="288" class="module-label">局部特征输出</text>
+            <text x="270" y="300" class="module-label" style="font-size:8pt; fill:#6b7280;">s × 16-dim</text>
+
+            <!-- 标注感受野 -->
+            <text x="430" y="100" font-size="9pt" fill="#1e40af" font-weight="600">感受野: 3</text>
+            <text x="430" y="172" font-size="9pt" fill="#1e40af" font-weight="600">感受野: 7</text>
+        </svg>
+    </div>
+    <figcaption><strong>图 2-4</strong> CATCN 模块内部结构（两层空洞因果卷积 + ECA 注意力）</figcaption>
+</figure>
+
+<h2 class="section-title">2.5 时序注意力双向长短期记忆模块（TA-BiLSTM）</h2>
+
+<p>月度需求受电网投资周期、宏观经济波动等长程因素驱动，需建模跨越数年的全局依赖。为此引入双向 LSTM 编码器，并在其输出层叠加时序注意力机制，动态聚焦于历史关键时间步。</p>
+
+<h3 class="subsection-title">2.5.1 双向 LSTM 编码</h3>
+
+<p>记筛选后的输入序列为 \( \mathbf{H}^{(0)} = [\mathbf{h}_1, \dots, \mathbf{h}_s] \in \mathbb{R}^{s 	imes d_{	ext{in}}} \)。首先经线性投影映射至隐藏空间：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        	ilde{\mathbf{h}}_t = 	ext{ReLU}(\mathbf{W}_{	ext{proj}} \mathbf{h}_t + \mathbf{b}_{	ext{proj}}) \in \mathbb{R}^{d_h},
+        \]
+    </div>
+    <span class="equation-number">(2-13)</span>
+</div>
+
+<p>其中 \( d_h = 32 \)。双向 LSTM 通过前向与后向两个独立细胞体分别编码历史上下文与未来上下文（在编码阶段允许双向，预测阶段仅使用历史窗口）：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \overrightarrow{\mathbf{z}}_t = 	ext{LSTM}_{
+ightarrow}(	ilde{\mathbf{h}}_t, \overrightarrow{\mathbf{z}}_{t-1}), \quad
+        \overleftarrow{\mathbf{z}}_t = 	ext{LSTM}_{\leftarrow}(	ilde{\mathbf{h}}_t, \overleftarrow{\mathbf{z}}_{t+1}).
+        \]
+    </div>
+    <span class="equation-number">(2-14)</span>
+</div>
+
+<p>拼接后得到隐藏状态矩阵 \( \mathbf{Z} = [\overrightarrow{\mathbf{z}}_1 \oplus \overleftarrow{\mathbf{z}}_1, \dots, \overrightarrow{\mathbf{z}}_s \oplus \overleftarrow{\mathbf{z}}_s] \in \mathbb{R}^{s 	imes 2d_h} \)。进一步经层归一化（LayerNorm）稳定分布：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \hat{\mathbf{Z}} = 	ext{LayerNorm}(\mathbf{Z}) \in \mathbb{R}^{s 	imes 2d_h}.
+        \]
+    </div>
+    <span class="equation-number">(2-15)</span>
+</div>
+
+<h3 class="subsection-title">2.5.2 时序注意力加权</h3>
+
+<p>并非所有历史时间步对当前预测具有同等贡献。时序注意力模块为每个时间步计算注意力得分：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        e_t = \mathbf{w}_a^	op 	anh(\mathbf{W}_q \, \hat{\mathbf{z}}_t + \mathbf{b}_q),
+        \]
+    </div>
+    <span class="equation-number">(2-16)</span>
+</div>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        lpha_t = rac{\exp(e_t)}{\sum_{	au=1}^{s} \exp(e_	au)}, \qquad
+        \mathbf{c} = \sum_{t=1}^{s} lpha_t \, \hat{\mathbf{z}}_t.
+        \]
+    </div>
+    <span class="equation-number">(2-17)</span>
+</div>
+
+<p>其中 \( \mathbf{c} \in \mathbb{R}^{2d_h} \) 为全局上下文向量，\( \{lpha_t\} \) 构成可解释的时间权重分布，可用于后续可视化分析关键历史月份。最终 TA-BiLSTM 输出全局特征向量 \( \mathbf{f}^{	ext{global}} = \mathbf{c} \in \mathbb{R}^{64} \)。模块结构如图 2-5 所示。</p>
+
+<figure id="fig-2-5">
+    <div class="svg-figure">
+        <svg width="540" height="380" viewBox="0 0 540 380" xmlns="http://www.w3.org/2000/svg">
+            <!-- 输入 -->
+            <rect x="190" y="10" width="160" height="36" class="module-box" rx="3"/>
+            <text x="270" y="28" class="module-label">输入投影 (16→32)</text>
+            <line x1="270" y1="46" x2="270" y2="62" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+
+            <!-- BiLSTM -->
+            <rect x="130" y="62" width="280" height="70" class="module-box core" rx="3"/>
+            <text x="270" y="85" class="module-label">双向 LSTM (hidden=32, layers=1)</text>
+            <text x="270" y="103" class="module-label" style="font-size:8.5pt; fill:#4b5563;">前向编码 + 后向编码 → 拼接 64-dim</text>
+            <text x="270" y="118" class="module-label" style="font-size:8.5pt; fill:#4b5563;">输出序列: s × 64</text>
+
+            <line x1="270" y1="132" x2="270" y2="148" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+
+            <!-- LayerNorm -->
+            <rect x="200" y="148" width="140" height="32" class="module-box" rx="3"/>
+            <text x="270" y="167" class="module-label">LayerNorm</text>
+
+            <line x1="270" y1="180" x2="270" y2="196" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+
+            <!-- Attention -->
+            <rect x="140" y="196" width="260" height="80" class="module-box aux" rx="3"/>
+            <text x="270" y="218" class="module-label">时序注意力 (Temporal Attention)</text>
+            <text x="270" y="238" class="module-label" style="font-size:8.5pt; fill:#4b5563;">得分: eₜ = wᵀ tanh(W·ẑₜ + b)</text>
+            <text x="270" y="255" class="module-label" style="font-size:8.5pt; fill:#4b5563;">权重: αₜ = softmax(eₜ)  上下文: c = Σαₜẑₜ</text>
+
+            <!-- 注意力权重示意 -->
+            <rect x="420" y="210" width="100" height="52" class="module-box" rx="3"/>
+            <text x="470" y="228" class="module-label" style="font-size:8.5pt;">注意力权重</text>
+            <text x="470" y="245" class="module-label" style="font-size:8pt; fill:#6b7280;">α₁, α₂, ..., αₛ</text>
+            <text x="470" y="258" class="module-label" style="font-size:8pt; fill:#6b7280;">Σα = 1</text>
+            <line x1="400" y1="236" x2="420" y2="236" stroke="#8b5cf6" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+
+            <line x1="270" y1="276" x2="270" y2="296" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+
+            <!-- Dropout -->
+            <rect x="210" y="296" width="120" height="28" class="module-box" rx="3"/>
+            <text x="270" y="314" class="module-label">Dropout(0.3)</text>
+
+            <line x1="270" y1="324" x2="270" y2="344" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+
+            <!-- 输出 -->
+            <rect x="190" y="344" width="160" height="30" class="module-box" rx="3"/>
+            <text x="270" y="362" class="module-label">全局特征向量 (64-dim)</text>
+        </svg>
+    </div>
+    <figcaption><strong>图 2-5</strong> TA-BiLSTM 模块结构（双向编码 + 时序注意力加权）</figcaption>
+</figure>
+
+<h2 class="section-title">2.6 门控融合与预测头</h2>
+
+<h3 class="subsection-title">2.6.1 自适应门控融合</h3>
+
+<p>CATCN 输出的局部特征 \( \mathbf{f}^{	ext{local}} \in \mathbb{R}^{d_{	ext{cat}}} \)（\( d_{	ext{cat}} = 16 \)）与 TA-BiLSTM 输出的全局特征 \( \mathbf{f}^{	ext{global}} \in \mathbb{R}^{2d_h} \)（\( 2d_h = 64 \)）具有不同的物理内涵与维度。门控融合模块首先通过独立线性投影将其映射至统一空间 \( \mathbb{R}^{d_u} \)（取 \( d_u = 32 \)）：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \mathbf{u}_l = \mathbf{W}_l \mathbf{f}^{	ext{local}} + \mathbf{b}_l, \qquad
+        \mathbf{u}_g = \mathbf{W}_g \mathbf{f}^{	ext{global}} + \mathbf{b}_g,
+        \]
+    </div>
+    <span class="equation-number">(2-18)</span>
+</div>
+
+<p>随后通过门控向量 \( \mathbf{g} \in [0,1]^{d_u} \) 实现自适应加权融合：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \mathbf{g} = \sigmaig( \mathbf{W}_g^{(2)} \, 	ext{ReLU}(\mathbf{W}_g^{(1)} [\mathbf{u}_l \oplus \mathbf{u}_g] + \mathbf{b}_g^{(1)}) + \mathbf{b}_g^{(2)} ig),
+        \]
+    </div>
+    <span class="equation-number">(2-19)</span>
+</div>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \mathbf{u}^{	ext{fused}} = \mathbf{g} \odot \mathbf{u}_l + (1 - \mathbf{g}) \odot \mathbf{u}_g \in \mathbb{R}^{d_u}.
+        \]
+    </div>
+    <span class="equation-number">(2-20)</span>
+</div>
+
+<p>门控机制赋予网络根据输入样本动态调节局部与全局信息比重的灵活性。当序列呈现强季节性冲击时，\( \mathbf{g} \) 趋近于 1，CATCN 局部模式占主导；当序列受宏观投资长周期驱动时，\( \mathbf{g} \) 趋近于 0，BiLSTM 全局上下文占主导。</p>
+
+<h3 class="subsection-title">2.6.2 预测头（Prediction Head）</h3>
+
+<p>融合后的 \( d_u = 32 \) 维向量经两层全连接网络映射至标量残差输出：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \Delta_{	ext{deep}} = \mathbf{w}_o^	op \, 	ext{Dropout}\Big( 	ext{ReLU}ig( 	ext{BN}(\mathbf{W}_2 \, 	ext{Dropout}(	ext{ReLU}(	ext{BN}(\mathbf{W}_1 \mathbf{u}^{	ext{fused}} + \mathbf{b}_1))) + \mathbf{b}_2) ig) \Big) + b_o.
+        \]
+    </div>
+    <span class="equation-number">(2-21)</span>
+</div>
+
+<p>其中隐藏层维度依次为 32 → 16 → 1，每层间插入批归一化（BN）、ReLU 激活与 Dropout（比率 0.3），以抑制小样本场景下的过拟合风险。</p>
+
+<figure id="fig-2-6">
+    <div class="svg-figure">
+        <svg width="560" height="240" viewBox="0 0 560 240" xmlns="http://www.w3.org/2000/svg">
+            <!-- 局部输入 -->
+            <rect x="20" y="40" width="100" height="44" class="module-box core" rx="3"/>
+            <text x="70" y="58" class="module-label">局部特征</text>
+            <text x="70" y="74" class="module-label" style="font-size:8.5pt; fill:#4b5563;">16-dim (CATCN)</text>
+
+            <!-- 全局输入 -->
+            <rect x="20" y="140" width="100" height="44" class="module-box aux" rx="3"/>
+            <text x="70" y="158" class="module-label">全局特征</text>
+            <text x="70" y="174" class="module-label" style="font-size:8.5pt; fill:#4b5563;">64-dim (BiLSTM)</text>
+
+            <!-- 投影箭头 -->
+            <line x1="120" y1="62" x2="170" y2="90" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+            <line x1="120" y1="162" x2="170" y2="134" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+
+            <!-- 投影层 -->
+            <rect x="170" y="70" width="80" height="40" class="module-box" rx="3"/>
+            <text x="210" y="85" class="module-label" style="font-size:8.5pt;">线性投影</text>
+            <text x="210" y="100" class="module-label" style="font-size:8pt; fill:#6b7280;">→ 32-dim</text>
+
+            <rect x="170" y="110" width="80" height="40" class="module-box" rx="3"/>
+            <text x="210" y="125" class="module-label" style="font-size:8.5pt;">线性投影</text>
+            <text x="210" y="140" class="module-label" style="font-size:8pt; fill:#6b7280;">→ 32-dim</text>
+
+            <!-- 拼接 -->
+            <line x1="250" y1="90" x2="290" y2="110" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+            <line x1="250" y1="130" x2="290" y2="110" stroke="#6b7280" stroke-width="1.2" marker-end="url(#arrowhead)"/>
+
+            <!-- Gate -->
+            <rect x="290" y="80" width="120" height="60" class="module-box highlight" rx="3"/>
+            <text x="350" y="100" class="module-label">门控网络</text>
+            <text x="350" y="115" class="module-label" style="font-size:8.5pt; fill:#4b5563;">FC(64→32) + ReLU</text>
+            <text x="350" y="130" class="module-label" style="font-size:8.5pt; fill:#4b5563;">+ FC(32→32) + σ</text>
+
+            <!-- 输出融合 -->
+            <line x1="410" y1="110" x2="450" y2="110" stroke="#1e40af" stroke-width="1.5" marker-end="url(#arrowhead-blue)"/>
+            <rect x="450" y="80" width="90" height="60" class="module-box highlight" rx="3"/>
+            <text x="495" y="100" class="module-label">融合输出</text>
+            <text x="495" y="115" class="module-label" style="font-size:8.5pt; fill:#4b5563;">u_fused = g·u_l</text>
+            <text x="495" y="130" class="module-label" style="font-size:8.5pt; fill:#4b5563;">+ (1-g)·u_g</text>
+        </svg>
+    </div>
+    <figcaption><strong>图 2-6</strong> 门控融合机制结构示意</figcaption>
+</figure>
+
+<h2 class="section-title">2.7 残差跳连与损失函数</h2>
+
+<h3 class="subsection-title">2.7.1 需求残差跳连</h3>
+
+<p>月度需求序列具有强自相关性，相邻月份需求值本身即为下一期预测的有力基准。若强制网络直接拟合原始需求值，在小样本条件下易陷入局部最优。因此，引入残差跳连机制，令网络仅学习相对于上一时刻真实需求的深度残差：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \hat{y}_{t+1} = y_t + \Delta_{	ext{deep}}(\mathbf{u}^{	ext{fused}}_t; \Theta_{	ext{head}}),
+        \]
+    </div>
+    <span class="equation-number">(2-22)</span>
+</div>
+
+<p>其中 \( y_t \) 为 \( t \) 时刻真实需求（Z-score 归一化后），\( \Delta_{	ext{deep}} \) 为预测头输出的残差修正量。该机制等效于在深度网络与输出之间建立恒等映射捷径，显著降低有效学习目标的方差，加速收敛并提升泛化性能。</p>
+
+<h3 class="subsection-title">2.7.2 损失函数与优化</h3>
+
+<p>训练目标为最小化预测值与真实值之间的均方误差（MSE）。记训练集包含 \( N \) 个样本，则损失函数为：</p>
+
+<div class="equation">
+    <div class="equation-content">
+        \[
+        \mathcal{L}(\Theta) = rac{1}{N} \sum_{i=1}^{N} ig( \hat{y}_{t_i+1}^{(i)} - y_{t_i+1}^{(i)} ig)^2 + \lambda \| \Theta \|_2^2,
+        \]
+    </div>
+    <span class="equation-number">(2-23)</span>
+</div>
+
+<p>其中 \( \lambda = 10^{-3} \) 为 L2 正则化系数，用于约束网络权重的复杂度。优化器采用 AdamW，初始学习率 \( \eta_0 = 5 	imes 10^{-4} \)，配合余弦退火策略（Cosine Annealing）衰减至 \( \eta_{\min} = 10^{-6} \)，总迭代轮数 300 epoch，早停耐心系数（patience）设为 30。梯度裁剪阈值设定为 1.0，以防范递归网络中的梯度爆炸风险。</p>
+
+<h3 class="subsection-title">2.7.3 前向传播流程总结</h3>
+
+<p>综合上述各模块，所提框架的完整前向传播可概括为算法 2-1。</p>
+
+<table class="academic">
+    <tr>
+        <td style="text-align:left; padding:10pt;">
+            <strong>算法 2-1</strong> &nbsp; VMD-CAT-BiLSTM-FS 前向传播流程<br><br>
+            <strong>输入：</strong> 历史窗口特征 \( \mathbf{H}_t \in \mathbb{R}^{s 	imes 16} \)，上一时刻需求 \( y_t \)<br>
+            <strong>输出：</strong> 下一时刻需求预测 \( \hat{y}_{t+1} \)<br><br>
+            <strong>1.</strong> &nbsp; 局部编码：\( \mathbf{F}^{	ext{local}} = 	ext{CATCN}(\mathbf{H}_t) \in \mathbb{R}^{s 	imes 16} \)，取最后时刻特征 \( \mathbf{f}^{	ext{local}} = \mathbf{F}^{	ext{local}}_{s} \)；<br><br>
+            <strong>2.</strong> &nbsp; 全局编码：\( \mathbf{Z} = 	ext{BiLSTM}(\mathbf{H}_t) \in \mathbb{R}^{s 	imes 64} \)，经 LayerNorm 后送入时序注意力，得 \( \mathbf{f}^{	ext{global}} = 	ext{TemporalAttn}(\hat{\mathbf{Z}}) \in \mathbb{R}^{64} \)；<br><br>
+            <strong>3.</strong> &nbsp; 门控融合：按式 (2-18)–(2-20) 计算 \( \mathbf{u}^{	ext{fused}} \in \mathbb{R}^{32} \)；<br><br>
+            <strong>4.</strong> &nbsp; 残差预测：\( \Delta_{	ext{deep}} = 	ext{PredictionHead}(\mathbf{u}^{	ext{fused}}) \)；<br><br>
+            <strong>5.</strong> &nbsp; 跳连重构：\( \hat{y}_{t+1} = y_t + \Delta_{	ext{deep}} \)。<br><br>
+            <strong>返回</strong> \( \hat{y}_{t+1} \)
+        </td>
+    </tr>
+</table>
+
+<p>至此，本章完成了所提预测框架从信号分解、特征筛选、双支路编码、自适应融合到残差预测的全链路数学建模与结构阐述。第三章将在此基础上展开数据集构建、实验设置与结果分析。</p>
+
+</div>
+</body>
+</html>

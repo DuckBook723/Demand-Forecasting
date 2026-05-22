@@ -1,6 +1,6 @@
 """
 文件位置: experiments/baselines/lstm_fair_model.py
-作用: 与 XGBoost 特征平等的 LSTM/BiLSTM 对比实验 — 可复现版 + 防过拟合
+作用: 与 XGBoost 特征平等的 LSTM/BiLSTM — 优化版（精简特征 + 提升容量）
 """
 
 import os
@@ -15,13 +15,17 @@ from sklearn.preprocessing import StandardScaler
 
 from src.models.trainer import calculate_metrics
 from src.data.preprocess import load_raw_data, split_by_time, clean_data_train, clean_data_with_stats
-from experiments.baselines.xgboost_model import build_features  # 复用 XGBoost 特征工程
+from experiments.baselines.xgboost_model import build_features
 from configs.config import (
     SIM_DATASET_PATH, DEMAND_COL, TRAIN_RATIO, VAL_RATIO,
-    BATCH_SIZE, RANDOM_SEED, MODELS_DIR, DATA_FIGURES_DIR, FIGURES_DIR
+    BATCH_SIZE, RANDOM_SEED, DATA_FIGURES_DIR,
 )
 
-# ==================== 0. 全局随机种子固定（确保可复现）====================
+import warnings
+warnings.filterwarnings("ignore")
+
+
+# ==================== 0. 全局随机种子固定 ====================
 def seed_everything(seed: int = 42):
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
@@ -33,31 +37,46 @@ def seed_everything(seed: int = 42):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     print(f"🔒 全局随机种子固定: seed={seed}")
+    print(f"   PyTorch version: {torch.__version__}")
     print(f"   CUDA deterministic: {torch.backends.cudnn.deterministic}")
     print(f"   CUDA benchmark: {torch.backends.cudnn.benchmark}")
+    if torch.cuda.is_available():
+        print(f"   CUDA version: {torch.version.cuda}")
+        print(f"   GPU: {torch.cuda.get_device_name(0)}")
 
-def get_worker_init_fn(seed=42):
-    """DataLoader worker 进程随机种子固定"""
-    def worker_init_fn(worker_id):
-        np.random.seed(seed + worker_id)
-        random.seed(seed + worker_id)
-        torch.manual_seed(seed + worker_id)
-    return worker_init_fn
 
-# ==================== 1. 公平数据加载（特征筛选 + 严格时序）====================
+# ==================== 核心特征子集（精简至 ~20 维）====================
+# 基于 XGBoost 特征重要性，仅保留对月度需求预测最关键的特征
+CORE_FEATURES = [
+    # 原始外部特征（11 维）
+    'temperature', 'extreme_weather_days', 'wind_speed',
+    'macro_invest_growth', 'gdp_growth', 'copper_price_index',
+    'power_load_MW', 'equipment_aging_rate', 'bidding_intensity',
+    'renewable_capacity_MW', 'is_spring_festival',
+    # 时间特征（2 维）
+    'month', 'quarter',
+    # 需求滞后（2 维）— 最关键
+    'demand_lag_1', 'demand_lag_12',
+    # 滚动统计（1 维）
+    'demand_roll_mean_12',
+    # 差分（1 维）
+    'demand_diff_1',
+    # 外部滞后（选 3 个与需求相关性最高的）
+    'ext_macro_invest_growth_lag_1',
+    'ext_power_load_MW_lag_1',
+    'ext_temperature_lag_1',
+]
+
+
+# ==================== 1. 公平数据加载（精简特征 + 修复 NaN）====================
 def load_fair_baseline_data(seq_len=12, use_feature_selection=True, importance_threshold=0.01):
-    """
-    加载数据，特征与 XGBoost 完全对齐，可选特征重要性筛选。
-    返回字典包含 dataloaders、y 统计量、input_dim 等。
-    """
-    print("📂 加载数据（LSTM/BiLSTM 公平对比版 — 特征筛选+防泄露）...")
+    print("📂 加载数据（LSTM/BiLSTM 公平对比版 — 精简特征与 XGBoost 对齐）...")
     df = load_raw_data(SIM_DATASET_PATH)
     train_raw, val_raw, test_raw = split_by_time(df, TRAIN_RATIO, VAL_RATIO)
     train_clean, clean_stats = clean_data_train(train_raw)
     val_clean = clean_data_with_stats(val_raw, clean_stats)
     test_clean = clean_data_with_stats(test_raw, clean_stats)
 
-    # 外部特征列表（与 XGBoost 一致）
     external_cols = [
         'temperature', 'extreme_weather_days', 'wind_speed',
         'macro_invest_growth', 'gdp_growth', 'copper_price_index',
@@ -70,24 +89,38 @@ def load_fair_baseline_data(seq_len=12, use_feature_selection=True, importance_t
     val_feat = build_features(val_clean, DEMAND_COL, external_cols, seq_len)
     test_feat = build_features(test_clean, DEMAND_COL, external_cols, seq_len)
 
-    # 获取共同特征列（排除 target）
-    common_cols = list(set(train_feat.columns) & set(val_feat.columns) & set(test_feat.columns))
-    common_cols = [c for c in common_cols if c != 'target']
+    # 获取共同特征列
+    all_cols = [c for c in train_feat.columns if c != 'target' and c in val_feat.columns and c in test_feat.columns]
 
-    # 【新增】特征重要性筛选
+    # 特征筛选策略
     if use_feature_selection:
         imp_path = os.path.join(DATA_FIGURES_DIR, 'xgboost_feature_importance.csv')
         if os.path.exists(imp_path):
             imp_df = pd.read_csv(imp_path)
             top_features = imp_df[imp_df['importance'] > importance_threshold]['feature'].tolist()
-            common_cols = [c for c in common_cols if c in top_features]
-            print(f"   ✅ 特征筛选后保留 {len(common_cols)} 个特征（重要性 > {importance_threshold})")
+            common_cols = [c for c in all_cols if c in top_features]
+            print(f"   ✅ 基于 XGBoost 重要性筛选，保留 {len(common_cols)} 个特征")
         else:
-            print("   ⚠️ 未找到特征重要性文件，跳过筛选")
+            # 【关键优化】未找到重要性文件时，使用预定义核心特征子集，而非全部 55 维
+            common_cols = [c for c in all_cols if c in CORE_FEATURES]
+            print(f"   ⚠️ 未找到特征重要性文件，使用预定义核心特征子集（{len(common_cols)} 维）")
+    else:
+        common_cols = all_cols
+        print(f"   ℹ️ 使用全部特征（{len(common_cols)} 维）")
 
+    # 断言：确保核心特征至少有一部分存在
+    if len(common_cols) == 0:
+        raise ValueError("❌ 特征交集为空，请检查 CORE_FEATURES 与 build_features 输出是否匹配")
+
+    # 【修复】直接对 DataFrame 赋值，确保 dropna 生效
     train_feat = train_feat[common_cols + ['target']].dropna()
     val_feat = val_feat[common_cols + ['target']].dropna()
     test_feat = test_feat[common_cols + ['target']].dropna()
+
+    # 断言：确保无 NaN
+    for name, feat_df in [("train", train_feat), ("val", val_feat), ("test", test_feat)]:
+        if feat_df.isnull().any().any():
+            raise ValueError(f"❌ {name}_feat 仍存在 NaN")
 
     # 标准化特征（仅训练集 fit）
     scaler_X = StandardScaler()
@@ -105,7 +138,10 @@ def load_fair_baseline_data(seq_len=12, use_feature_selection=True, importance_t
     y_val_z = (y_val - y_mean) / y_std
     y_test_z = (y_test - y_mean) / y_std
 
-    # 【严格时序】在每个集合内部独立构造滑动窗口样本（无跨集合泄露）
+    print(f"   特征维度: {len(common_cols)} (精简后与 XGBoost 核心特征对齐)")
+    print(f"   训练样本: {len(train_feat)} | 验证: {len(val_feat)} | 测试: {len(test_feat)}")
+
+    # 严格时序：在每个集合内部独立构造滑动窗口
     def create_seq(X, y, seq_len):
         Xs, ys = [], []
         for i in range(len(X) - seq_len):
@@ -117,23 +153,20 @@ def load_fair_baseline_data(seq_len=12, use_feature_selection=True, importance_t
     X_val_seq, y_val_seq = create_seq(X_val, y_val_z, seq_len)
     X_test_seq, y_test_seq = create_seq(X_test, y_test_z, seq_len)
 
-    print(f"   特征维度: {len(common_cols)} (与 XGBoost 对齐)")
-    print(f"   训练样本: {len(X_train_seq)} | 验证: {len(X_val_seq)} | 测试: {len(X_test_seq)}")
+    print(f"   序列样本 — 训练: {len(X_train_seq)} | 验证: {len(X_val_seq)} | 测试: {len(X_test_seq)}")
 
-    worker_fn = get_worker_init_fn(seed=RANDOM_SEED)
+    assert not np.isnan(X_train_seq).any(), "X_train_seq 包含 NaN"
+    assert not np.isnan(y_train_seq).any(), "y_train_seq 包含 NaN"
+
     train_loader = DataLoader(
         TensorDataset(torch.tensor(X_train_seq), torch.tensor(y_train_seq)),
-        batch_size=BATCH_SIZE, shuffle=True, drop_last=True,
-        num_workers=0, worker_init_fn=worker_fn
-    )
+        batch_size=BATCH_SIZE, shuffle=True, drop_last=True, num_workers=0)
     val_loader = DataLoader(
         TensorDataset(torch.tensor(X_val_seq), torch.tensor(y_val_seq)),
-        batch_size=BATCH_SIZE, shuffle=False
-    )
+        batch_size=BATCH_SIZE, shuffle=False)
     test_loader = DataLoader(
         TensorDataset(torch.tensor(X_test_seq), torch.tensor(y_test_seq)),
-        batch_size=BATCH_SIZE, shuffle=False
-    )
+        batch_size=BATCH_SIZE, shuffle=False)
 
     return {
         "train_loader": train_loader,
@@ -148,9 +181,10 @@ def load_fair_baseline_data(seq_len=12, use_feature_selection=True, importance_t
         "n_test": len(X_test_seq),
     }
 
-# ==================== 2. 模型定义（低容量 + 强正则化）====================
+
+# ==================== 2. 模型定义（提升容量 + 适度正则化）====================
 class FairLSTM(nn.Module):
-    def __init__(self, input_dim, hidden_dim=16, num_layers=1, dropout=0.5):
+    def __init__(self, input_dim, hidden_dim=48, num_layers=2, dropout=0.3):
         super().__init__()
         self.lstm = nn.LSTM(
             input_dim, hidden_dim, num_layers,
@@ -159,8 +193,7 @@ class FairLSTM(nn.Module):
         self.ln = nn.LayerNorm(hidden_dim)
         self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(hidden_dim, 1)
-        # 小权重初始化，避免初始输出过大
-        nn.init.xavier_uniform_(self.fc.weight, gain=0.1)
+        nn.init.xavier_uniform_(self.fc.weight, gain=0.5)
         nn.init.zeros_(self.fc.bias)
 
     def forward(self, x):
@@ -171,18 +204,17 @@ class FairLSTM(nn.Module):
 
 
 class FairBiLSTM(nn.Module):
-    def __init__(self, input_dim, hidden_dim=12, num_layers=1, dropout=0.5):
-        # BiLSTM 隐藏单元减半，双向拼接后与 LSTM 参数量相当
+    def __init__(self, input_dim, hidden_dim=32, num_layers=2, dropout=0.3):
         super().__init__()
         self.bilstm = nn.LSTM(
             input_dim, hidden_dim, num_layers,
             batch_first=True, bidirectional=True,
-            dropout=0.0
+            dropout=0.0 if num_layers == 1 else dropout
         )
         self.ln = nn.LayerNorm(hidden_dim * 2)
         self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(hidden_dim * 2, 1)
-        nn.init.xavier_uniform_(self.fc.weight, gain=0.1)
+        nn.init.xavier_uniform_(self.fc.weight, gain=0.5)
         nn.init.zeros_(self.fc.bias)
 
     def forward(self, x):
@@ -192,20 +224,24 @@ class FairBiLSTM(nn.Module):
         return self.fc(out).squeeze(-1)
 
 
-# ==================== 3. 训练与评估 ====================
-def train_and_eval(model_class, model_name, data_dict, epochs=300, lr=5e-4, patience=20, device='cuda'):
+# ==================== 3. 训练与评估（优化超参）====================
+def train_and_eval(model_class, model_name, data_dict, epochs=300, lr=1e-3, patience=30, device='cuda'):
     device = torch.device(device if torch.cuda.is_available() else 'cpu')
     model = model_class(input_dim=data_dict["input_dim"]).to(device)
 
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"\n🏋️ {model_name} | 参数量: {n_params:,}")
+    print(f"\n{'=' * 50}")
+    print(f"🏋️ 开始训练（{model_name}）")
+    print(f"{'=' * 50}")
+    print(f" 📦 参数量: {n_params:,}")
+    print(f" 📋 lr={lr}, weight_decay=1e-3, dropout=0.3, loss=MSE")
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-2)  # 强 L2 正则
-    criterion = nn.HuberLoss(delta=0.5)  # 对异常值鲁棒
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-3)
+    criterion = nn.MSELoss()
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
 
     best_val_loss = float('inf')
-    best_state = None
+    best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
     no_improve = 0
 
     for epoch in range(1, epochs + 1):
@@ -216,6 +252,9 @@ def train_and_eval(model_class, model_name, data_dict, epochs=300, lr=5e-4, pati
             optimizer.zero_grad()
             pred = model(xb)
             loss = criterion(pred, yb)
+            if torch.isnan(loss):
+                optimizer.zero_grad()
+                continue
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
@@ -224,22 +263,37 @@ def train_and_eval(model_class, model_name, data_dict, epochs=300, lr=5e-4, pati
 
         model.eval()
         val_loss = 0.0
+        val_preds_z, val_trues_z = [], []
         with torch.no_grad():
             for xb, yb in data_dict["val_loader"]:
                 xb, yb = xb.to(device), yb.to(device)
-                val_loss += criterion(model(xb), yb).item() * xb.size(0)
+                pred = model(xb)
+                vloss = criterion(pred, yb)
+                if not torch.isnan(vloss):
+                    val_loss += vloss.item() * xb.size(0)
+                val_preds_z.append(pred.cpu().numpy())
+                val_trues_z.append(yb.cpu().numpy())
         val_loss /= len(data_dict["val_loader"].dataset)
+        val_preds_z = np.concatenate(val_preds_z)
+        val_trues_z = np.concatenate(val_trues_z)
         scheduler.step(val_loss)
 
-        if val_loss < best_val_loss:
+        # 验证集 R²（原始空间）
+        vp = val_preds_z * data_dict["y_std"] + data_dict["y_mean"]
+        vt = val_trues_z * data_dict["y_std"] + data_dict["y_mean"]
+        vm = calculate_metrics(vt, vp, is_normalized=False)
+
+        if epoch % 20 == 0 or epoch == 1:
+            ratio = val_loss / train_loss if train_loss > 0 else float('inf')
+            cur_lr = optimizer.param_groups[0]['lr']
+            print(f" Epoch {epoch:3d}/{epochs} - Train:{train_loss:.5f}, Val:{val_loss:.5f}, V/T:{ratio:.1f}x, ValR²:{vm['R2']:.4f}, LR:{cur_lr:.2e}")
+
+        if not np.isnan(val_loss) and val_loss < best_val_loss:
             best_val_loss = val_loss
             best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
             no_improve = 0
         else:
             no_improve += 1
-
-        if epoch % 20 == 0 or epoch == 1:
-            print(f" {model_name} Epoch {epoch:3d} | Train Loss: {train_loss:.5f} | Val Loss: {val_loss:.5f}")
 
         if no_improve >= patience:
             print(f" ⏹️ 早停于 epoch {epoch}")
@@ -263,16 +317,30 @@ def train_and_eval(model_class, model_name, data_dict, epochs=300, lr=5e-4, pati
     preds_real = np.maximum(preds_real, 0)
 
     metrics = calculate_metrics(trues_real, preds_real, is_normalized=False)
-    print(f"\n📊 {model_name} 测试结果:")
-    print(f" RMSE: {metrics['RMSE']:.4f} | MAE: {metrics['MAE']:.4f} | MAPE: {metrics['MAPE']:.2f}% | R²: {metrics['R2']:.4f}")
+
+    print(f"\n{'=' * 50}")
+    print(f"📊 {model_name} 测试集结果")
+    print(f"{'=' * 50}")
+    print(f" RMSE: {metrics['RMSE']:.4f}")
+    print(f" MAE:  {metrics['MAE']:.4f}")
+    print(f" MAPE: {metrics['MAPE']:.2f}%")
+    print(f" R²:   {metrics['R2']:.4f}")
+    print(f" 参数量: {n_params:,}")
+
+    print(f"\n 📈 对比主模型 (Full Model, R²=0.8858):")
+    r2_diff = metrics['R2'] - 0.8858
+    rmse_diff = metrics['RMSE'] - 303.26
+    print(f"    R²  : {metrics['R2']:.4f} ({r2_diff:+.4f})")
+    print(f"    RMSE: {metrics['RMSE']:.4f} ({rmse_diff:+.1f})")
 
     return metrics, n_params
+
 
 # ==================== 4. 主函数 ====================
 def run_fair_experiment():
     seed_everything(seed=RANDOM_SEED)
     print("\n" + "=" * 70)
-    print("🧪 LSTM/BiLSTM 公平对比实验（可复现 + 防过拟合）")
+    print("🧪 LSTM/BiLSTM 公平对比实验（精简特征 + 提升容量）")
     print("=" * 70)
 
     data_dict = load_fair_baseline_data(
@@ -281,38 +349,47 @@ def run_fair_experiment():
         importance_threshold=0.01
     )
 
-    results = []
+    all_results = []
     for ModelClass, name in [(FairLSTM, 'FairLSTM'), (FairBiLSTM, 'FairBiLSTM')]:
         metrics, n_params = train_and_eval(ModelClass, name, data_dict)
-        results.append({
+        all_results.append({
             "name": name,
             "RMSE": metrics["RMSE"],
             "MAE": metrics["MAE"],
             "MAPE": metrics["MAPE"],
             "R2": metrics["R2"],
-            "n_params": n_params
+            "n_params": n_params,
+            "train_time_min": 0,
         })
 
-    df = pd.DataFrame(results)
+    df = pd.DataFrame(all_results)
     os.makedirs(DATA_FIGURES_DIR, exist_ok=True)
-    df.to_csv(os.path.join(DATA_FIGURES_DIR, "fair_lstm_bilstm_results.csv"), index=False)
-    print("\n📋 公平对比结果:")
-    print(df.to_string(index=False))
+    csv_path = os.path.join(DATA_FIGURES_DIR, "fair_lstm_bilstm_results.csv")
+    df.to_csv(csv_path, index=False)
 
-    # 保存实验日志
+    print(f"\n{'=' * 70}")
+    print("📋 公平对比实验汇总")
+    print(f"{'=' * 70}")
+    print(df.to_string(index=False))
+    print(f"\n💾 结果已保存至: {csv_path}")
+
     log_path = os.path.join(DATA_FIGURES_DIR, "fair_lstm_experiment_log.json")
     with open(log_path, 'w') as f:
         json.dump({
             "seed": RANDOM_SEED,
-            "model_params": {
-                "hidden_lstm": 16, "layers_lstm": 1,
-                "hidden_bilstm": 12, "dropout": 0.5,
-                "learning_rate": 5e-4, "weight_decay": 1e-2,
-                "patience": 20, "loss": "Huber(delta=0.5)"
+            "models": {
+                "FairLSTM": {"hidden": 48, "layers": 2},
+                "FairBiLSTM": {"hidden": 32, "layers": 2}
             },
-            "results": results
+            "hyperparams": {
+                "lr": 1e-3, "weight_decay": 1e-3, "dropout": 0.3,
+                "patience": 30, "loss": "MSE"
+            },
+            "results": all_results,
         }, f, indent=2)
+    print(f"📝 实验日志已保存: {log_path}")
     return df
+
 
 if __name__ == "__main__":
     run_fair_experiment()
