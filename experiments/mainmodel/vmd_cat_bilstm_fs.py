@@ -712,10 +712,13 @@ class PredictionHead(nn.Module):
 
 class VMD_CAT_BiLSTM(nn.Module):
     """需求残差跳连 + 动量特征 + 特征筛选"""
-    def __init__(self, input_dim, catcn_hidden=32, catcn_output=16,
-                 catcn_layers=2, bilstm_hidden=32, bilstm_layers=1,
-                 unified_dim=32, dropout=0.3):
+
+    def __init__(self, input_dim, catcn_hidden=16, catcn_output=16, catcn_layers=2,
+                 bilstm_hidden=24, bilstm_layers=1, unified_dim=24, dropout=0.3,
+                 pred_hidden_dims=None):  # ← 新增 pred_hidden_dims 参数，修改默认隐藏层大小
         super().__init__()
+        if pred_hidden_dims is None:
+            pred_hidden_dims = [16, 8]  # ← 默认降参配置：[32,16] -> [16,8]
         self.catcn = CATCN(input_dim, catcn_hidden, catcn_output,
                            num_layers=catcn_layers, dropout=dropout)
         # self.catcn = nn.Linear(input_dim, catcn_hidden)
@@ -724,15 +727,19 @@ class VMD_CAT_BiLSTM(nn.Module):
         self.fusion = GateFusion(local_dim=catcn_output,
                                   global_dim=bilstm_hidden * 2,
                                   unified_dim=unified_dim)
-        self.head = PredictionHead(unified_dim, hidden_dims=[32, 16],
+        self.head = PredictionHead(unified_dim, hidden_dims=pred_hidden_dims,
                                     dropout=dropout)
 
     def forward(self, x):
         demand_last = x[:, -1, -1]
-        f_local = self.catcn(x)
+
+        f_local = self.catcn(x)  # 或 self.local_proj(x)
         f_global, attn_weights = self.tabilstm(x)
         fused = self.fusion(f_local, f_global)
         deep_delta = self.head(fused)
+
+        # 季节感知跳连：年度差分为主，月度惯性为辅
+        # 对于季节型物资，demand_seasonal 是更好的基准
         out = deep_delta + 1.0 * demand_last
         return out
 
@@ -818,7 +825,7 @@ def load_vmd_catbilstm_data(seq_len=12, K=VMD_K, use_feature_selection=False):
         y_for_fs = train_demand[1:]
 
         feature_selector = ConsensusFeatureSelector(
-            protected_names=['demand'],
+            protected_names=['demand','IMF1', 'IMF2', 'IMF3', 'IMF4'],
             corr_threshold=0.05,
             redundancy_threshold=0.85,
             random_state=RANDOM_SEED,
@@ -901,32 +908,45 @@ def load_vmd_catbilstm_data(seq_len=12, K=VMD_K, use_feature_selection=False):
 
 
 # ========================================================================
-# Part 5: 训练 (与基线一致)
+# Part 5: 训练 (★ 新增: 逐epoch历史记录保存)
 # ========================================================================
 def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda"):
     print(f"\n{'=' * 50}")
     print("🏋️ 开始训练（特征筛选版）")
     print(f"{'=' * 50}")
-
     model = model.to(device)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f" 📦 参数量: {n_params:,}")
     print(f" 📋 lr={lr}, weight_decay=1e-3, dropout=0.3, 需求跳连=1.0固定")
-
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-3)
     criterion = nn.MSELoss()
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=epochs, eta_min=1e-6)
-
     best_val_loss = float("inf")
     best_state = None
     no_improve = 0
     train_loader = data_dict["train_loader"]
     val_loader = data_dict["val_loader"]
+    y_mean_fs = data_dict["y_mean"]
+    y_std_fs = data_dict["y_std"]
+
+    # ★ 新增: 逐epoch历史记录
+    history = {
+        "epoch": [],
+        "train_loss": [],
+        "val_loss": [],
+        "train_mae": [],
+        "val_mae": [],
+        "val_r2": [],
+        "val_rmse": [],
+        "val_mape": [],
+        "lr": [],
+    }
 
     for epoch in range(1, epochs + 1):
         model.train()
         total_loss = 0.0
+        train_preds_ep, train_trues_ep = [], []
         for xb, yb in train_loader:
             xb, yb = xb.to(device), yb.to(device).squeeze(-1)
             optimizer.zero_grad()
@@ -936,7 +956,14 @@ def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda
             clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             total_loss += loss.item() * xb.size(0)
+            train_preds_ep.append(pred.detach().cpu().numpy())
+            train_trues_ep.append(yb.detach().cpu().numpy())
         train_loss = total_loss / len(train_loader.dataset)
+
+        # ★ 训练集MAE (反标准化)
+        train_preds_raw = np.concatenate(train_preds_ep).flatten() * y_std_fs + y_mean_fs
+        train_trues_raw = np.concatenate(train_trues_ep).flatten() * y_std_fs + y_mean_fs
+        train_mae = np.mean(np.abs(train_preds_raw - train_trues_raw))
 
         model.eval()
         val_loss = 0.0
@@ -952,7 +979,29 @@ def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda
         val_preds = np.concatenate(val_preds)
         val_trues = np.concatenate(val_trues)
 
+        # ★ 验证集指标 (反标准化)
+        vp_raw = val_preds.flatten() * y_std_fs + y_mean_fs
+        vt_raw = val_trues.flatten() * y_std_fs + y_mean_fs
+        vp_raw = np.maximum(vp_raw, 0)
+        val_metrics = calculate_metrics(vt_raw, vp_raw, is_normalized=False)
+        val_mae = val_metrics['MAE']
+        val_r2 = val_metrics['R2']
+        val_rmse = val_metrics['RMSE']
+        val_mape = val_metrics['MAPE']
+
+        cur_lr = optimizer.param_groups[0]['lr']
         scheduler.step()
+
+        # ★ 记录历史
+        history["epoch"].append(epoch)
+        history["train_loss"].append(round(float(train_loss), 6))
+        history["val_loss"].append(round(float(val_loss), 6))
+        history["train_mae"].append(round(float(train_mae), 4))
+        history["val_mae"].append(round(float(val_mae), 4))
+        history["val_r2"].append(round(float(val_r2), 6))
+        history["val_rmse"].append(round(float(val_rmse), 4))
+        history["val_mape"].append(round(float(val_mape), 4))
+        history["lr"].append(round(float(cur_lr), 10))
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -963,21 +1012,22 @@ def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda
 
         if epoch % 20 == 0:
             ratio = val_loss / train_loss if train_loss > 0 else float('inf')
-            cur_lr = optimizer.param_groups[0]['lr']
-            y_mean, y_std = data_dict["y_mean"], data_dict["y_std"]
-            vp = val_preds * y_std + y_mean
-            vt = val_trues * y_std + y_mean
-            vp = np.maximum(vp, 0)
-            vm = calculate_metrics(vt, vp, is_normalized=False)
             print(f" Epoch {epoch}/{epochs} - "
                   f"Train:{train_loss:.5f}, Val:{val_loss:.5f}, V/T:{ratio:.1f}x, "
-                  f"ValR²:{vm['R2']:.4f}, LR:{cur_lr:.2e}")
+                  f"ValR²:{val_r2:.4f}, LR:{cur_lr:.2e}")
 
         if no_improve >= patience:
             print(f" ⏹️ 早停 epoch {epoch}")
             break
 
     model.load_state_dict(best_state)
+
+    # ★ 保存训练历史到JSON
+    history_path = os.path.join(DATA_FIGURES_DIR, "training_history.json")
+    with open(history_path, 'w') as f:
+        json.dump(history, f, indent=2)
+    print(f" 📊 训练历史已保存: {history_path} ({len(history['epoch'])} epochs)")
+
     save_path = os.path.join(MODELS_DIR, "best_vmdcatbilstm_fs_seed42.pth")
     torch.save({
         "model_state": best_state,
@@ -1019,6 +1069,7 @@ def evaluate_model(model, data_dict, device="cuda"):
     preds = np.maximum(preds, 0)
 
     metrics = calculate_metrics(trues, preds, is_normalized=False)
+
     return preds, trues, metrics
 
 
@@ -1041,7 +1092,13 @@ def run_vmd_catbilstm_experiment(epochs=300, patience=30, lr=5e-4,
         seq_len=12, use_feature_selection=use_feature_selection)
 
     input_dim = data_dict["input_dim"]
-    model = VMD_CAT_BiLSTM(input_dim=input_dim)
+    model = VMD_CAT_BiLSTM(
+        input_dim=input_dim,
+        catcn_hidden=16,  # 与主模型一致，原32
+        bilstm_hidden=24,  # 与主模型一致，原32
+        unified_dim=24,  # 与主模型一致，原32
+        pred_hidden_dims=[16, 8]  # 与主模型一致，原[32,16]
+    )
 
     model = train_model(model, data_dict, epochs, patience, lr, device)
     preds, trues, metrics = evaluate_model(model, data_dict, device)

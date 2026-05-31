@@ -1,25 +1,29 @@
 """
 文件位置: main.py
-作用: 电网物资需求预测项目 —— 一键全量实验调度脚本
-      阶段1: 数据仿真生成
+作用: 电网物资需求预测项目 —— 多物资一键全量实验调度脚本
+      阶段1: 数据仿真生成 (按物资编码自动切换)
       阶段2: 主模型 VMD-CAT-BiLSTM-FS
       阶段3: 消融实验 (4组)
       阶段4: 对比实验 (5组)
       阶段5: 汇总所有结果至统一表格
 
-修复记录 (v1.1):
-  1. 修正主模型结果文件名: vmd_cat_bilstm_fs → vmd_catbilstm_fs (与实验脚本输出对齐)
-  2. 增强结果读取: 即使进程exit码异常(如0xC0000409)，只要结果CSV存在且有效，即视为成功
-  3. 增强列名兼容: 支持 R2/R², RMSE/rmse 等大小写及特殊字符
-  4. 增加 PYTHONIOENCODING=utf-8 注入，根治 Windows 控制台编码错误
+设计原则:
+  1. 本文件不硬编码任何数据文件名或输出路径，全部通过 configs.config 动态获取
+  2. 通过环境变量 MATERIAL_SCENARIO 向子进程传递当前物资编码，驱动 config.py 切换路径
+  3. 支持命令行单物资运行: python main.py MAT002
+
+对接要求 (config.py 需配合):
+  请在 config.py 顶部增加动态切换逻辑，使子进程能根据 MATERIAL_SCENARIO 自动切换：
+  - SIM_DATASET_FILENAME / SIM_DATASET_PATH
+  - DATA_FIGURES_DIR (按物资分子目录，避免结果覆盖)
 """
 
 import os
 import sys
-import json
 import time
 import subprocess
 import warnings
+import importlib
 from pathlib import Path
 from datetime import datetime
 
@@ -28,62 +32,88 @@ import numpy as np
 
 warnings.filterwarnings("ignore")
 
-# ========================= 0. 项目路径配置 =========================
-PROJECT_ROOT = Path(__file__).parent.resolve()
-DATA_RAW_DIR = PROJECT_ROOT / "data" / "raw"
-FIGURES_DATA_DIR = PROJECT_ROOT / "figures" / "data"
-MODELS_DIR = PROJECT_ROOT / "models"
+# ========================= 0. 通过 config.py 统一获取所有路径 =========================
+import configs.config as cfg
 
-os.makedirs(DATA_RAW_DIR, exist_ok=True)
-os.makedirs(FIGURES_DATA_DIR, exist_ok=True)
-os.makedirs(MODELS_DIR, exist_ok=True)
+# 若本进程已设置 MATERIAL_SCENARIO，重载 config 以应用动态路径
+if os.environ.get("MATERIAL_SCENARIO"):
+    importlib.reload(cfg)
+
+PROJECT_ROOT = Path(cfg.BASE_DIR)
+DATA_RAW_DIR = Path(cfg.DATA_RAW_DIR)
+FIGURES_DIR = Path(cfg.FIGURES_DIR)
+MODELS_DIR = Path(cfg.MODELS_DIR)
 
 PYTHON_EXE = sys.executable
 
-# ========================= 1. 实验注册表 =========================
-# 关键修复: 主模型CSV文件名与实验脚本实际输出严格对齐
-EXPERIMENTS = [
-    # 主模型
-    ("主模型 (Full)", "experiments/mainmodel/vmd_cat_bilstm_fs.py",
-     "figures/data/vmd_catbilstm_fs_results.csv", "main"),
+# 物资注册表：编码 -> 生成脚本相对路径
+# 注：仅注册调度关系，所有数据文件名由 config.py 根据 MATERIAL_SCENARIO 控制
+MATERIAL_REGISTRY = {
+    "001": {"gen_script": "src/data/generate_data_mat001.py"},    # 变压器基准
+    "002": {"gen_script": "src/data/generate_data_mat002.py"},    # 绝缘导线
+    "003": {"gen_script": "src/data/generate_data_mat003.py"},    # 智能电表
+}
 
-    # 消融实验
-    ("消融: w/o CATCN", "experiments/ablations/vmd_cat_bilstm_fs_nocatcn.py",
-     "figures/data/vmd_catbilstm_fs_nocatcn_results.csv", "ablation"),
-    ("消融: w/o FS", "experiments/ablations/vmd_cat_bilstm_fs_nofs.py",
-     "figures/data/vmd_catbilstm_fs_nofs_results.csv", "ablation"),
-    ("消融: w/o Skip", "experiments/ablations/vmd_cat_bilstm_fs_noskip.py",
-     "figures/data/vmd_catbilstm_fs_noskip_results.csv", "ablation"),
-    ("消融: w/o VMD", "experiments/ablations/vmd_cat_bilstm_fs_novmd.py",
-     "figures/data/vmd_catbilstm_fs_novmd_results.csv", "ablation"),
-
-    # 对比实验（基线）
-    ("对比: ARIMA", "experiments/baselines/arima_model.py",
-     "figures/data/arima_results.csv", "baseline"),
-    ("对比: XGBoost", "experiments/baselines/xgboost_model.py",
-     "figures/data/xgboost_results.csv", "baseline"),
-    ("对比: LSTM-diff", "experiments/baselines/lstm_diff_model.py",
-     "figures/data/lstm_diff_results_seed42.csv", "baseline"),
-    ("对比: Fair-LSTM/BiLSTM", "experiments/baselines/lstm_fair_model.py",
-     "figures/data/fair_lstm_bilstm_results.csv", "baseline"),
-    ("对比: VMD-LSTM v2", "experiments/baselines/vmd_lstm_model.py",
-     "figures/data/vmd_lstm_results.csv", "baseline"),
+# 实验脚本固定相对路径（项目模块位置约定，非输出文件名）
+_EXPERIMENT_SCRIPTS = [
+    ("主模型 (Full)", "experiments/mainmodel/vmd_cat_bilstm_fs.py", "main"),
+    ("消融: w/o CATCN", "experiments/ablations/vmd_cat_bilstm_fs_nocatcn.py", "ablation"),
+    ("消融: w/o FS", "experiments/ablations/vmd_cat_bilstm_fs_nofs.py", "ablation"),
+    ("消融: w/o Skip", "experiments/ablations/vmd_cat_bilstm_fs_noskip.py", "ablation"),
+    ("消融: w/o VMD", "experiments/ablations/vmd_cat_bilstm_fs_novmd.py", "ablation"),
+    ("对比: ARIMA", "experiments/baselines/arima_model.py", "baseline"),
+    ("对比: XGBoost", "experiments/baselines/xgboost_model.py", "baseline"),
+    ("对比: LSTM-diff", "experiments/baselines/lstm_diff_model.py", "baseline"),
+    ("对比: Fair-LSTM/BiLSTM", "experiments/baselines/lstm_fair_model.py", "baseline"),
 ]
+
+# 实验输出文件名映射（与实验脚本内部保存逻辑保持一致）
+# 若实验脚本统一改为 f"{stem}_results.csv" 规范，可移除此映射表
+_SCRIPT_TO_CSV = {
+    "vmd_cat_bilstm_fs": "vmd_catbilstm_fs_results.csv",
+    "vmd_cat_bilstm_fs_nocatcn": "vmd_catbilstm_fs_nocatcn_results.csv",
+    "vmd_cat_bilstm_fs_nofs": "vmd_catbilstm_fs_nofs_results.csv",
+    "vmd_cat_bilstm_fs_noskip": "vmd_catbilstm_fs_noskip_results.csv",
+    "vmd_cat_bilstm_fs_novmd": "vmd_catbilstm_fs_novmd_results.csv",
+    "arima_model": "arima_results.csv",
+    "xgboost_model": "xgboost_results.csv",
+    "lstm_diff_model": "lstm_diff_results_seed42.csv",
+    "lstm_fair_model": "fair_lstm_bilstm_results.csv",
+}
 
 # Windows 假失败退出码集合 (进程保护触发，非实验错误)
 WINDOWS_FALSE_FAILURE_CODES = {3221226505, 0xC0000409, -1073740791}
 
-# ========================= 2. 工具函数 =========================
+
+# ========================= 1. 工具函数 =========================
 def print_banner(title, width=70):
     print("\n" + "=" * width)
     print(f" {title}")
     print("=" * width)
 
 
-def run_script(name, script_path, exp_type):
+def build_experiment_registry(material_code: str):
     """
-    运行单个实验脚本。若结果CSV已存在且有效，即使进程exit码异常也视为成功。
-    特别处理 Windows 0xC0000409 假失败。
+    根据物资编码动态构建实验注册表。
+    结果 CSV 路径位于 <FIGURES_DIR>/data/<material_code.lower()>/ 下，
+    要求 config.py 根据 MATERIAL_SCENARIO 将 DATA_FIGURES_DIR 指向同一目录。
+    """
+    material_out = FIGURES_DIR / "data" / material_code.lower()
+    material_out.mkdir(parents=True, exist_ok=True)
+
+    registry = []
+    for name, script_rel, exp_type in _EXPERIMENT_SCRIPTS:
+        script_name = Path(script_rel).stem
+        csv_name = _SCRIPT_TO_CSV.get(script_name, f"{script_name}_results.csv")
+        csv_path = str(material_out / csv_name)
+        registry.append((f"[{material_code}] {name}", script_rel, csv_path, exp_type))
+    return registry
+
+
+def run_script(name, script_path, exp_type, material_code: str):
+    """
+    运行单个实验脚本，向子进程注入 MATERIAL_SCENARIO 环境变量，
+    使子进程加载 config.py 时自动切换数据源与输出目录。
     """
     full_script = PROJECT_ROOT / script_path
     if not full_script.exists():
@@ -94,12 +124,11 @@ def run_script(name, script_path, exp_type):
     print(f"   脚本: {script_path}")
     start = time.time()
 
-    # 先尝试读取已存在的结果（复用/检查）
-    # 注意：这里不直接返回，仍运行脚本以获取最新结果；如运行失败再回退
-
     try:
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
+        # 关键：向子进程传递当前物资编码，驱动 config.py 动态路径切换
+        env["MATERIAL_SCENARIO"] = material_code
 
         proc = subprocess.run(
             [PYTHON_EXE, str(full_script)],
@@ -140,12 +169,12 @@ def run_script(name, script_path, exp_type):
         return {"status": "error", "time_min": elapsed, "name": name, "type": exp_type, "exit_code": None}
 
 
-def read_result_csv(csv_rel_path):
+def read_result_csv(csv_path_input):
     """
     读取实验结果 CSV。兼容单结果与多结果文件。
     增强列名匹配：支持 R2/R², rmse/RMSE 等变体。
     """
-    csv_path = PROJECT_ROOT / csv_rel_path
+    csv_path = Path(csv_path_input)
     if not csv_path.exists():
         return None
     try:
@@ -165,7 +194,7 @@ def read_result_csv(csv_rel_path):
 
         return df.iloc[0].to_dict()
     except Exception as e:
-        print(f"   ⚠️ 读取 {csv_rel_path} 出错: {e}")
+        print(f"   ⚠️ 读取 {csv_path} 出错: {e}")
         return None
 
 
@@ -218,34 +247,44 @@ def resolve_status(run_info, metrics):
     return run_info["status"]
 
 
-# ========================= 3. 阶段函数 =========================
-def stage1_generate_data():
-    """阶段1: 若原始数据不存在，则运行仿真数据生成。"""
-    print_banner("阶段 1: 数据仿真生成")
-    sim_data = DATA_RAW_DIR / "grid_material_demand_sim.csv"
-    if sim_data.exists():
-        print(f"✅ 仿真数据已存在: {sim_data}")
-        print("   跳过生成阶段。如需重新生成，请手动删除该文件。")
-        return
+# ========================= 2. 阶段函数 =========================
+def stage1_generate_data(material_code: str) -> bool:
+    """阶段1: 检查并生成指定物资的仿真数据。返回是否成功。"""
+    print_banner(f"阶段 1: 数据仿真生成 [{material_code}]")
 
-    # 优先查找增强版，回退原版
-    gen_candidates = [
-        PROJECT_ROOT / "src" / "data" / "generate_data_enhanced.py",
-        PROJECT_ROOT / "src" / "data" / "generate_data.py",
-    ]
-    gen_script = None
-    for cand in gen_candidates:
-        if cand.exists():
-            gen_script = cand
-            break
+    # 从 config.py 动态获取该物资的数据集路径（如 SIM_DATASET_MAT001_PATH）
+    dataset_path_attr = f"SIM_DATASET_{material_code}_PATH"
+    dataset_path = getattr(cfg, dataset_path_attr, None)
+    if dataset_path is None:
+        print(f"⚠️  [{material_code}] config.py 中未定义 {dataset_path_attr}，跳过数据生成")
+        return False
 
-    if gen_script is None:
-        print(f"⚠️ 数据生成脚本未找到: 请确认 src/data/generate_data*.py 存在。")
-        return
+    dataset_path = Path(dataset_path)
+    if dataset_path.exists():
+        print(f"✅  [{material_code}] 仿真数据已存在: {dataset_path}")
+        return True
 
-    print("🔄 正在生成仿真数据 ...")
+    # 查找并执行生成脚本
+    info = MATERIAL_REGISTRY.get(material_code)
+    if not info:
+        print(f"⚠️  [{material_code}] 未在 MATERIAL_REGISTRY 中注册生成脚本")
+        return False
+
+    gen_script = PROJECT_ROOT / info["gen_script"]
+    # 回退：尝试增强版命名
+    if not gen_script.exists():
+        alt = PROJECT_ROOT / info["gen_script"].replace(".py", "_enhanced.py")
+        if alt.exists():
+            gen_script = alt
+
+    if not gen_script.exists():
+        print(f"⚠️  [{material_code}] 数据生成脚本未找到: {info['gen_script']}")
+        return False
+
+    print(f"🔄  [{material_code}] 正在生成仿真数据: {gen_script.name} ...")
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
+    env["MATERIAL_SCENARIO"] = material_code
 
     proc = subprocess.run(
         [PYTHON_EXE, str(gen_script)],
@@ -256,27 +295,29 @@ def stage1_generate_data():
         errors="replace",
         env=env,
     )
+
     if proc.returncode == 0 or proc.returncode in WINDOWS_FALSE_FAILURE_CODES:
-        print("✅ 数据仿真完成。")
+        print(f"✅  [{material_code}] 数据仿真完成。")
+        return True
     else:
-        print("❌ 数据仿真失败:")
+        print(f"❌  [{material_code}] 数据仿真失败 (exit={proc.returncode}):")
         print(proc.stderr[-500:])
+        return False
 
 
-def stage2_to_4_run_experiments():
-    """阶段2~4: 串行运行主模型、消融实验与对比实验。"""
-    print_banner("阶段 2~4: 主模型 + 消融实验 + 对比实验")
+def stage2_to_4_run_experiments(material_code: str):
+    """阶段2~4: 串行运行指定物资的主模型、消融实验与对比实验。"""
+    print_banner(f"阶段 2~4: 主模型 + 消融实验 + 对比实验 [{material_code}]")
     print("说明: 所有实验串行执行，避免 GPU 显存冲突与随机种子污染。\n")
 
+    experiments = build_experiment_registry(material_code)
     records = []
-    for name, script, csv_path, exp_type in EXPERIMENTS:
-        run_info = run_script(name, script, exp_type)
+    for name, script, csv_path, exp_type in experiments:
+        run_info = run_script(name, script, exp_type, material_code)
         result_dict = read_result_csv(csv_path)
         metrics = extract_metrics(result_dict)
 
-        # 综合状态判断：结果优先
         final_status = resolve_status(run_info, metrics)
-
         record = {
             "实验组": name,
             "类别": exp_type,
@@ -287,16 +328,15 @@ def stage2_to_4_run_experiments():
         }
         records.append(record)
 
-        # 每完成一个实验，立即打印当前结果
         r2_str = f"{metrics['R2']:.4f}" if pd.notna(metrics['R2']) else "--"
         print(f"\n📊 当前结果: {name} | 状态={final_status} | R²={r2_str}")
 
     return records
 
 
-def stage5_summary(records):
-    """阶段5: 汇总所有实验结果并输出表格。"""
-    print_banner("阶段 5: 实验结果汇总")
+def stage5_summary(records, material_code: str):
+    """阶段5: 汇总指定物资的实验结果并输出表格。"""
+    print_banner(f"阶段 5: 实验结果汇总 [{material_code}]")
 
     df = pd.DataFrame(records)
 
@@ -305,18 +345,19 @@ def stage5_summary(records):
                  "n_params", "n_features", "脚本耗时(min)", "exit_code"]
     df = df[[c for c in col_order if c in df.columns]]
 
-    # 保存汇总 CSV
-    summary_csv = FIGURES_DATA_DIR / "all_experiments_summary.csv"
+    # 保存汇总 CSV 到物资子目录
+    material_out = FIGURES_DIR / "data" / material_code.lower()
+    material_out.mkdir(parents=True, exist_ok=True)
+    summary_csv = material_out / "all_experiments_summary.csv"
     df.to_csv(summary_csv, index=False, float_format="%.4f")
     print(f"✅ 汇总表格已保存: {summary_csv}")
 
     # 保存 Markdown 表格
     try:
-        summary_md = FIGURES_DATA_DIR / "all_experiments_summary.md"
+        summary_md = material_out / "all_experiments_summary.md"
         with open(summary_md, "w", encoding="utf-8") as f:
-            f.write("# 电网物资需求预测 —— 全量实验结果汇总\n\n")
+            f.write(f"# 电网物资需求预测 —— {material_code} 全量实验结果汇总\n\n")
             f.write(f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-            # 简单 Markdown 表格
             f.write("| " + " | ".join(df.columns) + " |\n")
             f.write("| " + " | ".join(["---"] * len(df.columns)) + " |\n")
             for _, row in df.iterrows():
@@ -372,26 +413,46 @@ def stage5_summary(records):
     return 0
 
 
-# ========================= 4. 主入口 =========================
+# ========================= 3. 主入口 =========================
 def main():
     total_start = time.time()
-    print_banner("电网物资需求预测 —— 一键全量实验流水线", width=80)
+    print_banner("电网物资需求预测 —— 多物资一键全量实验流水线", width=80)
     print(f"项目根目录: {PROJECT_ROOT}")
     print(f"Python: {PYTHON_EXE}")
     print(f"开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"注册物资: {list(MATERIAL_REGISTRY.keys())}")
 
-    # 阶段1: 数据
-    stage1_generate_data()
+    # 支持命令行指定单个或多个物资，如: python main.py MAT002
+    # 无参数时默认运行全部注册物资
+    target_materials = sys.argv[1:] if len(sys.argv) > 1 else list(MATERIAL_REGISTRY.keys())
 
-    # 阶段2~4: 实验
-    records = stage2_to_4_run_experiments()
+    global_exit = 0
+    for material in target_materials:
+        if material not in MATERIAL_REGISTRY:
+            print(f"\n⚠️ 未知物资编码: {material}，已跳过。可用: {list(MATERIAL_REGISTRY.keys())}")
+            global_exit = 1
+            continue
 
-    # 阶段5: 汇总
-    exit_code = stage5_summary(records)
+        print_banner(f"开始处理物资: {material}", width=70)
+
+        # 阶段1: 数据
+        data_ok = stage1_generate_data(material)
+        if not data_ok:
+            print(f"❌ [{material}] 数据准备失败，跳过后续实验。")
+            global_exit = 1
+            continue
+
+        # 阶段2~4: 实验
+        records = stage2_to_4_run_experiments(material)
+
+        # 阶段5: 汇总
+        exit_code = stage5_summary(records, material)
+        if exit_code != 0:
+            global_exit = 1
 
     total_min = (time.time() - total_start) / 60.0
     print_banner(f"全部完成 | 总耗时: {total_min:.2f} 分钟", width=80)
-    return exit_code
+    return global_exit
 
 
 if __name__ == "__main__":

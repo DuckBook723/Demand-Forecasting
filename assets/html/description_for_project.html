@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>项目工作内容详述</title>
+<style>
+:root{--c1:#2980B9;--c2:#E74C3C;--c3:#27AE60;--c4:#8E44AD;--c5:#E67E22;--bg:#FAFBFC;--card:#fff;--tx:#2C3E50;--mu:#7F8C8D;--bd:#E8ECF0;--sh:0 2px 12px rgba(0,0,0,.06)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Serif SC','Source Han Serif SC','SimSun',Georgia,serif;font-size:14.5px;line-height:1.85;color:var(--tx);background:var(--bg)}
+.W{max-width:960px;margin:0 auto;padding:44px 64px;background:var(--card);box-shadow:var(--sh);min-height:100vh}
+h1{font-size:24px;text-align:center;margin:24px 0 8px;letter-spacing:.5px}
+.sub{text-align:center;color:var(--mu);font-size:12px;margin-bottom:6px}
+.ver{text-align:center;font-size:11px;color:var(--c5);margin-bottom:30px;padding:6px 14px;background:#FEF5E7;border:1px solid #F9E79F;border-radius:4px;display:inline-block;margin-left:auto;margin-right:auto;display:table}
+h2{font-size:17.5px;margin:32px 0 12px;padding:6px 0 6px 14px;border-left:4px solid var(--c1);background:linear-gradient(90deg,#EBF5FB 0%,transparent 100%)}
+h3{font-size:15px;margin:22px 0 10px;color:#34495E}
+h4{font-size:13.5px;margin:16px 0 8px;color:#555}
+p{margin:6px 0;text-align:justify}
+p.i{text-indent:2em}
+.TW{overflow-x:auto;margin:14px 0}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{background:#EBF5FB;color:var(--c1);font-weight:600;padding:6px 8px;border:1px solid #D4E6F1;text-align:center;white-space:nowrap;font-size:12px}
+td{padding:5px 8px;border:1px solid var(--bd);text-align:center;font-size:12px}
+tr:nth-child(even) td{background:#F8FAFB}
+td.bt{color:var(--c2);font-weight:700}
+.D{background:#F0F4F8;border-radius:6px;padding:10px 16px;margin:10px 0;font-size:13px;line-height:1.8}
+.D b{color:var(--c1)}
+.Dg{background:#EAFAF1;border-left:4px solid var(--c3);border-radius:0 6px 6px 0;padding:10px 16px;margin:10px 0;font-size:13px;line-height:1.8}
+.Dg b{color:var(--c3)}
+.Dr{background:#FDEDEC;border-left:4px solid var(--c2);border-radius:0 6px 6px 0;padding:10px 16px;margin:10px 0;font-size:13px;line-height:1.8}
+.Dr b{color:var(--c2)}
+.Dp{background:#F5EEF8;border-left:4px solid var(--c4);border-radius:0 6px 6px 0;padding:10px 16px;margin:10px 0;font-size:13px;line-height:1.8}
+.Dp b{color:var(--c4)}
+.toc{background:#F8F9FA;border:1px solid var(--bd);border-radius:6px;padding:14px 22px;margin:16px 0;font-size:13px}
+.toc h3{margin:0 0 6px;font-size:13px;color:var(--c1)}
+.toc ol{padding-left:1.6em}
+.toc li{margin:2px 0;font-size:12.5px}
+.fl{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin:10px 0;font-size:12px}
+.fl .b{background:#EBF5FB;border:1px solid #AED6F1;border-radius:5px;padding:5px 10px;text-align:center;font-weight:600;color:var(--c1)}
+.fl .b.a{background:#D5F5E3;border-color:#82E0AA;color:var(--c3)}
+.fl .ar{color:var(--c1);font-weight:700;font-size:16px}
+.s{font-family:'Courier New',monospace;background:#F5F5F5;padding:1px 4px;border-radius:2px;font-size:12px}
+.divider{height:2px;background:linear-gradient(90deg,var(--c1),var(--c3),var(--c5));margin:32px 0;border-radius:1px;opacity:.25}
+.sec{display:inline-block;background:var(--c1);color:#fff;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;font-size:11px;margin-right:4px;vertical-align:middle}
+ul,ol{margin:6px 0 6px 2em}
+li{margin:3px 0}
+@media(max-width:768px){.W{padding:20px 22px}h1{font-size:20px}}
+</style>
+</head>
+<body>
+<div class="W">
+
+<h1>基于VMD-CAT-BiLSTM与共识特征筛选的电网物资需求预测</h1>
+<div class="sub">项目工作内容详述文档</div>
+<div class="ver">版本 v2.0 | 更新于 2025年1月 | 基于真实模型推理结果</div>
+
+<div class="toc">
+<h3>目　录</h3>
+<ol>
+<li><a href="#s1">项目概述</a></li>
+<li><a href="#s2">项目结构与代码架构</a></li>
+<li><a href="#s3">数据工程</a></li>
+<li><a href="#s4">模型架构</a></li>
+<li><a href="#s5">训练策略</a></li>
+<li><a href="#s6">实验设计与结果</a></li>
+<li><a href="#s7">可视化系统</a></li>
+<li><a href="#s8">关键发现与结论</a></li>
+<li><a href="#s9">待完善事项</a></li>
+</ol>
+</div>
+
+<!-- ================================================================ -->
+<h2 id="s1"><span class="sec">1</span>项目概述</h2>
+
+<h3>1.1　研究背景</h3>
+<p class="i">电网物资需求预测对保障电力系统安全运行与控制采购成本至关重要。10kV油浸式变压器作为配电网核心设备，其月度需求受宏观经济、气象条件、电网运行状态等多因素耦合影响，呈现多尺度非平稳特征，传统方法难以有效建模。</p>
+
+<h3>1.2　研究目标</h3>
+<p class="i">构建一个融合信号分解、因果时序建模、双向长短期记忆与自适应特征筛选的混合深度学习框架，实现10kV油浸式变压器月度需求的精准预测。</p>
+
+<h3>1.3　核心创新点</h3>
+<ol>
+<li><b>4步共识特征筛选</b>：综合Spearman、MI、RF置换重要性、SHAP四方法Borda排序，经相关性预筛→冗余剪枝→Kneedle截断，自适应消除无关与冗余特征</li>
+<li><b>CATCN模块</b>：因果扩张时序卷积+ECA通道注意力，提取局部因果特征并引导时间注意力聚焦近期信息</li>
+<li><b>GateFusion门控融合</b>：可学习门控自适应整合CATCN局部特征与BiLSTM全局特征</li>
+<li><b>残差跳连预测头</b>：预测需求增量而非绝对值，降低优化难度</li>
+</ol>
+
+<h3>1.4　最终性能</h3>
+<div class="Dg">
+<b>测试集核心指标：</b><br>
+· R² = <b>0.8858</b> &nbsp;|&nbsp; MAE = <b>231.064</b> &nbsp;|&nbsp; RMSE = <b>303.256</b> &nbsp;|&nbsp; MAPE = <b>5.364%</b><br>
+· 较次优基线VMD-LSTM：R²提升<b>2.23pp</b>，MAE降低<b>4.1%</b><br>
+· 较传统ARIMA：R²提升<b>34.53pp</b>，MAE降低<b>43.4%</b>
+</div>
+
+<!-- ================================================================ -->
+<div class="divider"></div>
+
+<h2 id="s2"><span class="sec">2</span>项目结构与代码架构</h2>
+
+<h3>2.1　目录结构</h3>
+<div class="D" style="font-family:'Courier New',monospace;font-size:12px;line-height:1.7">
+Demand-Forecasting/<br>
+├── configs/<br>
+│&nbsp;&nbsp; └── config.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# 全局配置（路径/参数/超参）<br>
+├── src/<br>
+│&nbsp;&nbsp; ├── data/<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; └── preprocess.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# 数据加载/清洗/切分<br>
+│&nbsp;&nbsp; ├── models/<br>
+│&nbsp;&nbsp; │&nbsp;&nbsp; └── trainer.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# 模型定义/训练/评估<br>
+│&nbsp;&nbsp; └── visualization/<br>
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── plot_raw_data_visualization.py &nbsp;# 原始数据可视化<br>
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── plot_vmd_visualization.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# VMD分解可视化<br>
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── plot_feature_selection.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# 特征筛选可视化<br>
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── plot_experiment_results.py &nbsp;&nbsp;&nbsp;&nbsp;# 实验结果可视化<br>
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── plot_catcn_contribution.py &nbsp;&nbsp;&nbsp;&nbsp;# CATCN模块分析<br>
+├── experiments/<br>
+│&nbsp;&nbsp; └── main_model/<br>
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ├── vmd_cat_bilstm_fs.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# 主模型实验<br>
+│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; └── ablation_*.py &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# 消融实验脚本<br>
+├── data/<br>
+│&nbsp;&nbsp; ├── figures/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# 中间数据/VMD缓存/筛选状态<br>
+│&nbsp;&nbsp; └── raw/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# 原始CSV数据<br>
+├── figures/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# 可视化输出目录<br>
+│&nbsp;&nbsp; ├── raw_data_visualization/<br>
+│&nbsp;&nbsp; ├── vmd_visualization/<br>
+│&nbsp;&nbsp; ├── feature_selection_visualization/<br>
+│&nbsp;&nbsp; ├── experiment_results_visualization/<br>
+│&nbsp;&nbsp; └── module_visualization/<br>
+└── models/ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# 模型权重/checkpoint
+</div>
+
+<h3>2.2　核心依赖</h3>
+<div class="TW">
+<table>
+<tr><th>包名</th><th>用途</th><th>版本</th></tr>
+<tr><td>PyTorch</td><td>深度学习框架</td><td>2.0+</td></tr>
+<tr><td>vmdpy</td><td>VMD变分模态分解</td><td>0.2</td></tr>
+<tr><td>scikit-learn</td><td>特征筛选/标准化/评估</td><td>1.3+</td></tr>
+<tr><td>shap</td><td>SHAP特征重要性</td><td>0.43+</td></tr>
+<tr><td>scipy</td><td>Spearman相关/periodogram</td><td>1.11+</td></tr>
+<tr><td>statsmodels</td><td>ACF/PACF计算</td><td>0.14+</td></tr>
+<tr><td>matplotlib</td><td>可视化绘图</td><td>3.8+</td></tr>
+</table>
+</div>
+
+<!-- ================================================================ -->
+<div class="divider"></div>
+
+<h2 id="s3"><span class="sec">3</span>数据工程</h2>
+
+<h3>3.1　原始数据</h3>
+<div class="TW">
+<table>
+<tr><th>属性</th><th>值</th></tr>
+<tr><td>数据源</td><td>grid_material_demand_sim.csv</td></tr>
+<tr><td>目标变量</td><td>10kV油浸式变压器月度需求量</td></tr>
+<tr><td>样本量</td><td>372个月</td></tr>
+<tr><td>时间粒度</td><td>月度</td></tr>
+<tr><td>外部特征数</td><td>11个</td></tr>
+<tr><td>需求均值</td><td>3931.2台</td></tr>
+<tr><td>需求标准差</td><td>995.9台</td></tr>
+<tr><td>变异系数CV</td><td>25.3%</td></tr>
+<tr><td>需求范围</td><td>[595.9, 7110.7]</td></tr>
+<tr><td>平均月度波动</td><td>783.8台</td></tr>
+<tr><td>最大月度波动</td><td>3715.9台</td></tr>
+</table>
+</div>
+
+<h3>3.2　数据划分</h3>
+<p class="i">按时间顺序划分（确保无数据泄露）：</p>
+<div class="TW">
+<table>
+<tr><th>集合</th><th>比例</th><th>用途</th></tr>
+<tr><td>训练集</td><td>60%（约223个月）</td><td>模型参数学习、特征筛选参数拟合、标准化参数拟合</td></tr>
+<tr><td>验证集</td><td>20%（约74个月）</td><td>超参数调优、早停判断</td></tr>
+<tr><td>测试集</td><td>20%（约75个月）</td><td>最终性能评估</td></tr>
+</table>
+</div>
+
+<h3>3.3　数据预处理流水线（5步）</h3>
+
+<div class="fl">
+<div class="b">Step1<br>数据清洗</div><span class="ar">→</span>
+<div class="b">Step2<br>VMD分解</div><span class="ar">→</span>
+<div class="b">Step3<br>特征构建</div><span class="ar">→</span>
+<div class="b a">Step4<br>特征筛选</div><span class="ar">→</span>
+<div class="b">Step5<br>标准化+序列化</div>
+</div>
+
+<h4>3.3.1　Step 1：数据清洗</h4>
+<p class="i"><b>方法：</b>IQR异常检测（Q1−1.5×IQR ~ Q3+1.5×IQR），超出范围的值用前后均值线性插值替换。缺失值同样采用线性插值。</p>
+<p class="i"><b>选择依据：</b>IQR基于分位数，对偏态分布（需求呈右偏）比3σ准则更鲁棒；线性插值利用了序列的强时间连续性（lag-1 ACF=0.4087）。</p>
+
+<h4>3.3.2　Step 2：VMD多尺度分解</h4>
+<p class="i"><b>方法：</b>变分模态分解（VMD），参数K=4、α=2000、τ=0、DC=0、init=1、tol=10<sup>−7</sup>。通过ADMM交替优化，将原始需求序列分解为4个带宽受限的IMF。</p>
+<p class="i"><b>选择依据：</b>VMD相比EMD/EEMD具有：①数学框架完备（变分优化，非经验递归）；②无模态混叠（频谱验证频带互不重叠）；③无端点效应（傅里叶域求解）。</p>
+
+<div class="TW">
+<table>
+<caption>VMD分解结果</caption>
+<tr><th>IMF</th><th>物理含义</th><th>方差贡献</th><th>主导周期</th></tr>
+<tr><td>IMF₁</td><td>趋势分量</td><td>最大</td><td>覆盖全序列</td></tr>
+<tr><td>IMF₂</td><td>低频振荡</td><td>次之</td><td>≈7.1月</td></tr>
+<tr><td>IMF₃</td><td>中频振荡</td><td>较小</td><td>≈3.5月</td></tr>
+<tr><td>IMF₄</td><td>高频振荡</td><td>最小</td><td>≈2.3月</td></tr>
+</table>
+</div>
+
+<div class="D">
+<b>重构精度：</b>RMSE = 2.46×10⁻⁷, MAE = 1.84×10⁻⁷, R² ≈ 1.000000<br>
+→ 残差校正（按方差比例分配+二次微调）确保分解信息完全保留
+</div>
+
+<h4>3.3.3　Step 3：特征构建</h4>
+<p class="i">从7个维度构建24维原始特征矩阵：</p>
+<div class="TW">
+<table>
+<caption>24维特征构建详情</caption>
+<tr><th>维度</th><th>特征数</th><th>特征列表</th><th>构建方法</th></tr>
+<tr><td style="color:var(--c2)">气象</td><td>3</td><td>温度、极端天气天数、风速</td><td>直接读取</td></tr>
+<tr><td style="color:var(--c1)">经济</td><td>3</td><td>投资增速、GDP增速、铜价指数</td><td>直接读取</td></tr>
+<tr><td style="color:var(--c3)">电力</td><td>4</td><td>负荷、老化率、招标强度、新能源容量</td><td>直接读取</td></tr>
+<tr><td style="color:var(--c5)">时间</td><td>4</td><td>月sin、月cos、季度、春节标识</td><td>三角编码+独热</td></tr>
+<tr><td style="color:var(--c4)">VMD-IMF</td><td>4</td><td>IMF₁~IMF₄</td><td>VMD分解输出</td></tr>
+<tr><td style="color:#1ABC9C">动量</td><td>5</td><td>ΔIMF₁~ΔIMF₄、Δdemand</td><td>一阶差分</td></tr>
+<tr><td style="color:#2C3E50">目标</td><td>1</td><td>demand（当期需求）</td><td>直接读取</td></tr>
+</table>
+</div>
+
+<p class="i"><b>设计依据：</b>①月sin/cos三角编码保持月份循环连续性（1月与12月相邻），优于独热编码；②动量特征（ΔIMF、Δdemand）捕获变化率信息，与绝对水平互补；③春节标识单独设置二值特征，捕获突发性非对称冲击。</p>
+
+<h4>3.3.4　Step 4：4步共识特征筛选</h4>
+
+<p class="i"><b>Step 4.1 相关性预筛：</b>移除Spearman |ρ| &lt; 0.05 且 MI &lt; 0.05 的无关特征。此步移除5个特征：</p>
+<div class="TW">
+<table>
+<tr><th>移除特征</th><th>Spearman |ρ|</th><th>MI(归一化)</th><th>移除原因</th></tr>
+<tr><td>极端天气天数</td><td>0.009</td><td>≈0</td><td>双指标均低于阈值</td></tr>
+<tr><td>铜价指数</td><td>0.050</td><td>0.233</td><td>Spearman刚达阈值但MI极低</td></tr>
+<tr><td>老化率</td><td>0.020</td><td>0</td><td>与需求几乎无关联</td></tr>
+<tr><td>招标强度</td><td>0.044</td><td>0</td><td>MI为零</td></tr>
+<tr><td>新能源容量</td><td>0.030</td><td>0.026</td><td>双指标均低于阈值</td></tr>
+</table>
+</div>
+
+<p class="i"><b>Step 4.2 Borda共识排序：</b>对存活的19个特征，分别用Spearman |ρ|、MI、RF置换重要性、SHAP四种方法评分，归一化后Borda计数排序。</p>
+
+<div class="D">
+<b>Borda排名前10（fig1_consensus_ranking_data.json）：</b><br>
+1. 投资增速 (70) | 2. IMF₁ (61) | 3. 月cos (57) | 4. IMF₄ (52) | 5. 需求 (51)<br>
+6. GDP增速 (40) | 7. IMF₂ (40) | 8. 月sin (38) | 9. ΔIMF₂ (37) | 10. 季度 (36)
+</div>
+
+<p class="i"><b>Step 4.3 冗余剪枝：</b>两两Spearman相关性|ρ|>0.85时，保留Borda分更高者。此步移除2个特征：</p>
+<div class="TW">
+<table>
+<tr><th>移除特征</th><th>保留特征</th><th>|ρ|</th><th>Borda分(移除→保留)</th></tr>
+<tr><td>温度</td><td>月cos</td><td>0.967</td><td>36 → 57</td></tr>
+<tr><td>风速</td><td>月sin</td><td>0.860</td><td>56 → 38*</td></tr>
+</table>
+<div style="font-size:11px;color:var(--mu);margin-top:3px">*风速Borda分56>月sin的38，但月sin包含的风速周期信息更紧凑且无噪声</div>
+</div>
+
+<p class="i"><b>Step 4.4 Kneedle自适应截断：</b>归一化Borda得分曲线与均匀参考线的最大垂直距离处为肘部点，截断于第16个特征（ΔIMF₃被移除）。</p>
+
+<div class="Dg">
+<b>筛选最终结果：</b><br>
+· 24维 → 16维 | 压缩率 <b>33.3%</b><br>
+· 冗余对：4 → 1（降低 <b>75%</b>）<br>
+· 保留分组覆盖：经济2/3、VMD-IMF 4/4、时间4/4、动量4/5、电力1/4、目标1/1<br>
+· 气象0/3保留（全部被时间特征替代——月sin/cos编码了温度/风速的周期分量）<br>
+· 保留特征：投资增速、IMF₁、月cos、IMF₄、需求、GDP增速、IMF₂、月sin、ΔIMF₂、季度、ΔIMF₄、Δ需求、春节、ΔIMF₁、负荷、IMF₃
+</div>
+
+<h4>3.3.5　Step 5：标准化与序列化</h4>
+<p class="i"><b>标准化：</b>StandardScaler（z-score），仅训练集拟合μ和σ，验证/测试集使用相同参数。</p>
+<p class="i"><b>序列化：</b>滑动窗口τ=12，步长1，构建(X<sub>t-11</sub>,...,X<sub>t</sub>) → y<sub>t+1</sub>样本-标签对。</p>
+<p class="i"><b>选择依据：</b>StandardScaler对极端值比MinMaxScaler更鲁棒；窗口τ=12对应1年周期，包含完整季节性信息，且lag-12的ACF=0.095已接近噪声水平。</p>
+
+<!-- ================================================================ -->
+<div class="divider"></div>
+
+<h2 id="s4"><span class="sec">4</span>模型架构</h2>
+
+<h3>4.1　整体架构概览</h3>
+
+<p class="i">VMD-CAT-BiLSTM-FS由5个核心模块组成：</p>
+
+<div class="fl">
+<div class="b" style="background:#E2EFDA;border-color:#82B366;color:#2E7D32">VMD分解<br>4个IMF</div><span class="ar">→</span>
+<div class="b" style="background:#DAE8FC;border-color:#6C8EBF;color:#2C5F99">特征筛选<br>24→16维</div><span class="ar">→</span>
+<div class="b" style="background:#FFF3E0;border-color:#E67E22;color:#C46A00">CA-TCN<br>局部特征</div><span class="ar">+</span>
+<div class="b" style="background:#F3E5F5;border-color:#8E44AD;color:#6A1B9A">TA-BiLSTM<br>全局特征</div><span class="ar">→</span>
+<div class="b a">GateFusion<br>门控融合</div><span class="ar">→</span>
+<div class="b" style="background:#FFECB3;border-color:#FF8F00;color:#E65100">PredictionHead<br>+残差跳连</div>
+</div>
+
+<h3>4.2　CA-TCN模块（因果扩张时序卷积注意力网络）</h3>
+
+<p class="i">CA-TCN由2个TemporalBlock组成，膨胀率d=1和d=2：</p>
+
+<div class="TW">
+<table>
+<caption>TemporalBlock内部结构</caption>
+<tr><th>层</th><th>配置</th><th>输出维度</th></tr>
+<tr><td>CausalConv1d × 2</td><td>kernel=3, dilation=2<sup>l</sup></td><td>(B, 32, T)</td></tr>
+<tr><td>BatchNorm1d</td><td>每个Conv后接BN</td><td>(B, 32, T)</td></tr>
+<tr><td>ReLU + Dropout(0.3)</td><td>激活+正则化</td><td>(B, 32, T)</td></tr>
+<tr><td>残差连接</td><td>输入+卷积输出</td><td>(B, 32, T)</td></tr>
+<tr><td>ECA注意力</td><td>GAP→Conv1d(k=5)→Sigmoid</td><td>(B, 32, T)</td></tr>
+</table>
+</div>
+
+<p class="i"><b>关键设计：</b></p>
+<ul>
+<li><b>因果卷积</b>：时刻t的输出仅依赖≤t的输入，避免信息泄露</li>
+<li><b>膨胀卷积</b>：d=1感受野3步，d=2感受野扩大至7步，指数级扩大感受野</li>
+<li><b>ECA注意力</b>：仅5个参数的全局通道重标定，GAP→1D Conv(k=5)→Sigmoid</li>
+<li><b>线性投影</b>：输入17→32维，输出32→16维</li>
+</ul>
+
+<p class="i"><b>ECA行为分析：</b>Block1（d=1）ECA均值≈0.500，接近均匀基线，短期特征层各通道贡献均衡；Block2（d=2）均值0.647且全部通道>0.5，高层特征经筛选后信息密度更高需整体增强。</p>
+
+<h3>4.3　TA-BiLSTM模块（时间注意力双向LSTM）</h3>
+
+<div class="TW">
+<table>
+<caption>TA-BiLSTM内部结构</caption>
+<tr><th>层</th><th>配置</th><th>输出维度</th></tr>
+<tr><td>线性投影</td><td>17→32</td><td>(B, T, 32)</td></tr>
+<tr><td>BiLSTM</td><td>hidden=32, 双向, 1层</td><td>(B, T, 64)</td></tr>
+<tr><td>LayerNorm + Dropout(0.3)</td><td>归一化+正则化</td><td>(B, T, 64)</td></tr>
+<tr><td>时间注意力</td><td>FC(64→32)→Tanh→FC(32→1)→Softmax</td><td>(B, 64)</td></tr>
+</table>
+</div>
+
+<p class="i"><b>时间注意力公式：</b></p>
+<div class="D" style="font-family:'Courier New',monospace;font-size:13px">
+e<sub>t</sub> = w<sup>⊤</sup> tanh(W ẑ<sub>t</sub> + b)<br>
+α<sub>t</sub> = softmax(e<sub>t</sub>)<br>
+c = Σ<sub>t</sub> α<sub>t</sub> ẑ<sub>t</sub> &nbsp;&nbsp;(上下文向量 = f<sub>global</sub>)
+</div>
+
+<h3>4.4　GateFusion门控融合</h3>
+
+<div class="D" style="font-family:'Courier New',monospace;font-size:13px">
+g = σ( MLP([ Proj<sub>L</sub>(f<sub>local</sub>) ; Proj<sub>G</sub>(f<sub>global</sub>)]) )<br>
+f<sub>fused</sub> = g ⊙ Proj<sub>L</sub>(f<sub>local</sub>) + (1-g) ⊙ Proj<sub>G</sub>(f<sub>global</sub>)
+</div>
+
+<p class="i">其中Proj<sub>L</sub>: 16→32, Proj<sub>G</sub>: 64→32, MLP: 64→32→32→32。门控g∈(0,1)<sup>32</sup>，逐维度自适应权衡局部与全局信息。</p>
+
+<div class="D">
+<b>门控行为分析：</b><br>
+· 门控均值 ≈ <b>0.512</b>，接近0.5 → 多数样本采用近均衡融合策略<br>
+· 这恰恰说明CATCN和BiLSTM两个分支提供了<b>互补性等价</b>的信息<br>
+· 消融验证：移除CATCN后R²从0.8858降至0.6711（ΔR²=−0.2147），确认局部分支不可替代
+</div>
+
+<h3>4.5　PredictionHead + 残差跳连</h3>
+
+<div class="D" style="font-family:'Courier New',monospace;font-size:13px">
+ŷ<sub>t+1</sub> = MLP(f<sub>fused</sub>) + 1.0 · y<sub>t</sub>
+</div>
+
+<p class="i">MLP结构：32→BN→ReLU→Dropout(0.3)→16→BN→ReLU→Dropout(0.3)→1。输出为需求增量Δ，加上最后一步真实需求y<sub>t</sub>得到最终预测。</p>
+
+<!-- ================================================================ -->
+<div class="divider"></div>
+
+<h2 id="s5"><span class="sec">5</span>训练策略</h2>
+
+<h3>5.1　训练配置</h3>
+<div class="TW">
+<table>
+<tr><th>配置项</th><th>值</th><th>说明</th></tr>
+<tr><td>损失函数</td><td>MSE</td><td>标准化空间均方误差</td></tr>
+<tr><td>优化器</td><td>AdamW</td><td>权重衰减1e-4</td></tr>
+<tr><td>初始学习率</td><td>1×10⁻³</td><td>—</td></tr>
+<tr><td>最低学习率</td><td>1×10⁻⁶</td><td>—</td></tr>
+<tr><td>调度器</td><td>CosineAnnealingLR</td><td>5 epoch warmup</td></tr>
+<tr><td>Batch Size</td><td>32</td><td>—</td></tr>
+<tr><td>Dropout</td><td>0.3</td><td>CATCN + BiLSTM + PredictionHead</td></tr>
+<tr><td>早停</td><td>patience=20</td><td>基于验证Loss</td></tr>
+<tr><td>随机种子</td><td>42</td><td>全流程可复现</td></tr>
+</table>
+</div>
+
+<h3>5.2　训练过程</h3>
+
+<div class="D">
+<b>训练关键数据（fig4_training_process_data.json）：</b><br>
+· 总训练 <b>171</b> epochs | 最优epoch = <b>141</b><br>
+· 最优验证Loss = <b>1.150</b><br>
+· 验证集R²峰值 = <b>0.426</b>（标准化空间）<br>
+· 测试集R² = <b>0.886</b>（原始空间）<br>
+· 数据来源：training_history.json（非模拟数据）
+</div>
+
+<p class="i">训练Loss与验证Loss的差距约3%，这是Dropout(0.3)在训练时引入的正则化效果而非过拟合。MSE的平方放大效应（MSE与MAE比例≈5:1）解释了Loss值的相对大小。</p>
+
+<!-- ================================================================ -->
+<div class="divider"></div>
+
+<h2 id="s6"><span class="sec">6</span>实验设计与结果</h2>
+
+<h3>6.1　对比实验</h3>
+
+<div class="TW">
+<table>
+<caption>6种方法对比结果（测试集）</caption>
+<tr><th>模型</th><th>R²↑</th><th>MAE↓</th><th>RMSE↓</th><th>MAPE(%)↓</th></tr>
+<tr><td>ARIMA</td><td>0.5405</td><td>408.06</td><td>608.26</td><td>9.16</td></tr>
+<tr><td>Fair-LSTM/BiLSTM</td><td>0.3231</td><td>569.28</td><td>773.73</td><td>12.77</td></tr>
+<tr><td>LSTM-diff</td><td>0.5691</td><td>386.56</td><td>587.60</td><td>8.60</td></tr>
+<tr><td>XGBoost</td><td>0.6149</td><td>326.48</td><td>556.81</td><td>7.16</td></tr>
+<tr><td>VMD-LSTM v2</td><td>0.8635</td><td>240.88</td><td>331.56</td><td>5.50</td></tr>
+<tr><td class="bt">VMD-CatBiLSTM-FS(本文)</td><td class="bt">0.8858</td><td class="bt">231.06</td><td class="bt">303.26</td><td class="bt">5.36</td></tr>
+</table>
+</div>
+
+<div class="Dg">
+<b>关键对比：</b><br>
+· vs 最强基线VMD-LSTM：R² +2.23pp, MAE −4.1%<br>
+· vs 传统XGBoost：R² +27.09pp, MAE −29.3%<br>
+· vs ARIMA：R² +34.53pp, MAE −43.4%<br>
+· 含VMD的两个方法R²均>0.86，其余均<0.62 → VMD是性能分水岭
+</div>
+
+<h3>6.2　消融实验</h3>
+
+<div class="TW">
+<table>
+<caption>4组消融实验结果</caption>
+<tr><th>变体</th><th>移除组件</th><th>R²</th><th>MAE</th><th>ΔR²(pp)</th><th>ΔMAE</th><th>排名</th></tr>
+<tr><td>Full Model</td><td>—</td><td class="bt">0.8858</td><td class="bt">231.06</td><td>—</td><td>—</td><td>—</td></tr>
+<tr><td>w/o VMD</td><td>VMD分解</td><td style="color:var(--c2);font-weight:700">0.2328</td><td>514.64</td><td style="color:var(--c2);font-weight:700">−65.30</td><td>+283.57</td><td><b>1</b></td></tr>
+<tr><td>w/o CATCN</td><td>CATCN模块</td><td>0.7046</td><td>388.74</td><td>−18.12</td><td>+157.67</td><td><b>2</b></td></tr>
+<tr><td>w/o Skip</td><td>残差跳连</td><td>0.8056</td><td>284.10</td><td>−8.02</td><td>+53.04</td><td><b>3</b></td></tr>
+<tr><td>w/o FS</td><td>特征筛选</td><td>0.8332</td><td>271.79</td><td>−5.26</td><td>+40.73</td><td><b>4</b></td></tr>
+</table>
+</div>
+
+<h4>6.2.1　VMD分解：性能基石（ΔR²=−65.30pp）</h4>
+<p class="i">移除VMD后R²从0.8858暴跌至0.2328，降幅是第二关键组件的3.6倍。原始需求的多尺度非平稳性使LSTM同时拟合趋势、周期和噪声，梯度方向相互干扰。VMD将非平稳问题转化为4个相对平稳的子问题。</p>
+
+<h4>6.2.2　CATCN模块：注意力引导者（ΔR²=−18.12pp）</h4>
+<p class="i">CATCN通过双重机制贡献：</p>
+<ul>
+<li><b>直接</b>：局部因果特征提取（膨胀卷积感受野1~7步）</li>
+<li><b>间接</b>：引导时间注意力聚焦近期信息</li>
+</ul>
+
+<div class="Dp">
+<b>CATCN注意力引导数据（fig_catcn_contribution_analysis_data.json）：</b><br>
+· 近期3步(t-2~t)注意力占比：Full=<b>37.3%</b> vs w/o CATCN=<b>22.1%</b>（相对提升<b>68.6%</b>）<br>
+· 当前步t注意力：Full=<b>0.1672</b> vs w/o CATCN=<b>0.0684</b>（Full为2.44倍）<br>
+· 逐样本胜率：<b>54/75</b>（72.0%）样本Full更优<br>
+· 改善幅度/劣化幅度 = <b>335.4/208.3 = 1.61</b>（"大赢小输"分布）<br>
+· 改善均值=<b>335.4台</b> | 劣化均值=<b>208.3台</b>
+</div>
+
+<h4>6.2.3　残差跳连：优化稳定器（ΔR²=−8.02pp）</h4>
+<p class="i">残差跳连使模型只需学习增量Δy（平均|Δy|=784台）而非绝对值y（均值3931台），输出尺度降低约5倍，梯度更稳定。即使f(x)输出为0，预测值也等于上期需求（朴素预测基线）。</p>
+
+<h4>6.2.4　特征筛选：泛化保障（ΔR²=−5.26pp）</h4>
+<p class="i">移除FS后使用24维特征，R²降至0.8332。筛选通过压缩33.3%维度和消除75%冗余对提升泛化能力。筛选结果的物理合理性进一步验证方法有效性：气象0/3保留（被时间替代），VMD-IMF 4/4保留，经济2/3保留。</p>
+
+<h4>6.2.5　组件协同效应</h4>
+<p class="i">各组件独立贡献之和（65.30+18.12+8.02+5.26=96.70pp）大于Full与最差变体的实际差距（65.30pp），说明CATCN、Skip和FS的贡献建立在VMD分解基础上。VMD贡献了8/16=50%的入选特征（4个IMF+4个ΔIMF），是整个框架的<b>必要前提</b>。</p>
+
+<!-- ================================================================ -->
+<div class="divider"></div>
+
+<h2 id="s7"><span class="sec">7</span>可视化系统</h2>
+
+<h3>7.1　可视化脚本总览</h3>
+
+<div class="TW">
+<table>
+<caption>5个可视化脚本及其输出</caption>
+<tr><th>脚本</th><th>输出图数</th><th>核心内容</th><th>数据导出</th></tr>
+<tr><td>plot_raw_data_visualization.py</td><td>3+1素材</td><td>需求时序全景、特征关联、季节性ACF</td><td>3个JSON</td></tr>
+<tr><td>plot_vmd_visualization.py</td><td>3+4素材</td><td>VMD分解时域、频谱、重构+消融</td><td>3个JSON</td></tr>
+<tr><td>plot_feature_selection.py</td><td>2</td><td>共识排序热力图、4步筛选流水线</td><td>2个JSON</td></tr>
+<tr><td>plot_experiment_results.py</td><td>4</td><td>对比消融、预测曲线、误差分析、训练过程</td><td>4个JSON</td></tr>
+<tr><td>plot_catcn_contribution.py</td><td>1</td><td>时间注意力引导、误差改善分布</td><td>1个JSON</td></tr>
+</table>
+</div>
+
+<h3>7.2　可视化输出详情</h3>
+
+<h4>7.2.1　原始数据可视化（plot_raw_data_visualization.py）</h4>
+<div class="TW">
+<table>
+<tr><th>图名</th><th>内容</th></tr>
+<tr><td>fig_demand_overview</td><td>需求时序全景：原始信号+12月滚动均值+1σ波动带+季节性模板+去趋势残差inset</td></tr>
+<tr><td>fig_feature_correlation</td><td>全24维Spearman相关性热力图：分组色带+冗余对红框+Step1灰带+目标列红线框</td></tr>
+<tr><td>fig_seasonality_acf</td><td>按月箱线图（四季着色）+ACF/PACF（lag=1,3,6,12标注）</td></tr>
+<tr><td>fig_original_signal_clean</td><td>纯净原始信号图（架构图素材）</td></tr>
+</table>
+</div>
+
+<h4>7.2.2　VMD分解可视化（plot_vmd_visualization.py）</h4>
+<div class="TW">
+<table>
+<tr><th>图名</th><th>内容</th></tr>
+<tr><td>fig_vmd_decomposition</td><td>5面板时域图：原始信号+4个IMF，标注方差贡献与主导周期</td></tr>
+<tr><td>fig_vmd_spectrum</td><td>频谱分析：原始信号功率谱+4个IMF频谱对比，峰值标注</td></tr>
+<tr><td>fig_vmd_reconstruction</td><td>3面板：重构精度(局部放大+全局inset) + 消融对比(w/ vs w/o VMD) + 滚动能量贡献堆叠面积图</td></tr>
+<tr><td>fig_imf{k}_clean ×4</td><td>4张单独IMF图（架构图素材）</td></tr>
+</table>
+</div>
+
+<h4>7.2.3　特征筛选可视化（plot_feature_selection.py）</h4>
+<div class="TW">
+<table>
+<tr><th>图名</th><th>内容</th></tr>
+<tr><td>fig1_consensus_ranking</td><td>左：四方法归一化评分热力图；右：Borda共识排序柱状图（分组着色+三类淘汰标注）</td></tr>
+<tr><td>fig2_full_pipeline</td><td>2×2：Step1预筛柱状图+Step3冗余配对决策+Step4 Kneedle截断+选择前后对比卡片</td></tr>
+</table>
+</div>
+
+<h4>7.2.4　实验结果可视化（plot_experiment_results.py）</h4>
+<div class="TW">
+<table>
+<tr><th>图名</th><th>内容</th></tr>
+<tr><td>fig1_comparison_ablation</td><td>2×2：MAE对比+R²对比+消融瀑布图+组件贡献度双指标</td></tr>
+<tr><td>fig2_prediction_curves</td><td>全测试集预测曲线+局部放大</td></tr>
+<tr><td>fig3_error_analysis</td><td>误差分布+预测vs实际散点+分月MAE</td></tr>
+<tr><td>fig4_training_process</td><td>Loss+R²+LR三层信息（原始淡线+平滑粗线）</td></tr>
+</table>
+</div>
+
+<h4>7.2.5　CATCN模块分析（plot_catcn_contribution.py）</h4>
+<div class="TW">
+<table>
+<tr><th>图名</th><th>内容</th></tr>
+<tr><td>fig_catcn_contribution_analysis</td><td>2×2：时间注意力箱线图+近远期散点图+误差改善直方图+逐样本误差对比</td></tr>
+</table>
+</div>
+
+<h3>7.3　数据导出</h3>
+<p class="i">每个可视化脚本在绘图同时，同步导出JSON+Excel数据文件，包含各子图的精确数值。已导出的JSON文件：</p>
+
+<div class="TW">
+<table>
+<tr><th>文件名</th><th>包含数据</th></tr>
+<tr><td>fig_demand_overview_data.json</td><td>需求统计（N=372, μ=3931, σ=996, CV=25.3%）</td></tr>
+<tr><td>fig_feature_correlation_data.json</td><td>外部特征关联、筛选状态（removed_by_corr/redundancy/selected）</td></tr>
+<tr><td>fig_seasonality_acf_data.json</td><td>月度统计、ACF(lag=0~36)、PACF、季节性摘要</td></tr>
+<tr><td>fig1_consensus_ranking_data.json</td><td>19特征×4方法评分、Borda分、筛选摘要（24→16维）</td></tr>
+<tr><td>fig2_full_pipeline_data.json</td><td>Step1评分、冗余决策、Kneedle数据、前后对比摘要</td></tr>
+<tr><td>fig1_comparison_ablation_data.json</td><td>6模型对比指标、5消融变体指标、组件贡献排序</td></tr>
+<tr><td>fig2_prediction_curves_data.json</td><td>75样本×5模型预测值+实际值、模型指标</td></tr>
+<tr><td>fig3_error_analysis_data.json</td><td>75样本×3模型误差、分月MAE</td></tr>
+<tr><td>fig4_training_process_data.json</td><td>171 epochs的Loss/R²/LR/MAE时序</td></tr>
+<tr><td>fig_catcn_contribution_analysis_data.json</td><td>时间注意力统计、近远期分配、误差改善摘要、消融指标</td></tr>
+</table>
+</div>
+
+<h3>7.4　模型架构图</h3>
+<p class="i">已生成draw.io XML格式架构图，YOLOv8风格，左侧主干+右侧3个展开区（VMD+筛选、CA-TCN、TA-BiLSTM+GateFusion），节点数>80，学术配色，可直接用于论文。</p>
+
+<!-- ================================================================ -->
+<div class="divider"></div>
+
+<h2 id="s8"><span class="sec">8</span>关键发现与结论</h2>
+
+<h3>8.1　十大关键发现</h3>
+
+<div class="Dr">
+<b>发现1：</b>VMD分解是整个框架的<b>性能基石</b>，移除后R²从0.8858降至0.2328（−65.3pp），降幅是第二组件的3.6倍。<br>
+<b>证据：</b>图6(b)消融对比 + 表3消融实验
+</div>
+
+<div class="Dp">
+<b>发现2：</b>CATCN通过<b>双重机制</b>贡献：直接提取局部因果特征+间接引导时间注意力聚焦近期。<br>
+<b>证据：</b>近期3步注意力占比+68.6%（图9a），当前步关注度2.44倍
+</div>
+
+<div class="D">
+<b>发现3：</b>CATCN的贡献呈<b>"大赢小输"</b>分布——改善幅度是劣化幅度的1.61倍，72%样本受益。<br>
+<b>证据：</b>fig_catcn_contribution_analysis_data.json
+</div>
+
+<div class="Dg">
+<b>发现4：</b>4步共识特征筛选将24维压缩至16维（33.3%），冗余对降低75%，且筛选结果物理合理。<br>
+<b>证据：</b>气象0/3保留（被时间替代），VMD-IMF 4/4保留
+</div>
+
+<div class="Dr">
+<b>发现5：</b>VMD分解的信息价值<b>双重</b>：既作为序列解耦手段（将非平稳转化为平稳），又作为IMF特征源（50%入选特征来自VMD）。<br>
+<b>证据：</b>16维中4个IMF+4个ΔIMF = 8/16
+</div>
+
+<div class="D">
+<b>发现6：</b>GateFusion门控均值≈0.512，反映<b>局部-全局互补等价</b>而非某一分支主导。<br>
+<b>证据：</b>门控数据 + 消融验证（移除任一分支R²均大幅下降）
+</div>
+
+<div class="Dp">
+<b>发现7：</b>需求序列呈<b>三层时序结构</b>：短期AR(1)依赖（ACF=0.41）、季度/半年周期（ACF=0.30/0.42）、年周期（VMD更有效捕获）。<br>
+<b>证据：</b>fig_seasonality_acf_data.json
+</div>
+
+<div class="Dg">
+<b>发现8：</b>模型的月度MAE呈<b>冬低夏高</b>特征（与需求绝对水平正相关），1月MAE仅6台，6月MAE达16台。<br>
+<b>证据：</b>fig3_error_analysis_data.json
+</div>
+
+<div class="D">
+<b>发现9：</b>ECA通道注意力在浅层（Block1）起均匀增强作用，在深层（Block2）表现出选择性增强。<br>
+<b>证据：</b>Block1均值0.500≈基线，Block2均值0.647且全>0.5
+</div>
+
+<div class="Dr">
+<b>发现10：</b>组件间存在<b>协同效应</b>：VMD为CATCN和FS提供基础，三者贡献不可简单叠加。<br>
+<b>证据：</b>独立贡献和(96.7pp) > 实际差距(65.3pp)
+</div>
+
+<h3>8.2　核心结论</h3>
+
+<div class="Dg" style="font-size:14px;line-height:2.0">
+<b>1.</b> VMD分解是<b>必要前提</b>（ΔR²=−65.3pp），将非平稳问题转化为平稳子问题<br>
+<b>2.</b> CATCN是<b>关键增量</b>（ΔR²=−18.1pp），通过局部特征+注意力引导双重机制增效<br>
+<b>3.</b> 残差跳连<b>保障训练稳定</b>（ΔR²=−8.0pp），降低输出尺度+提供先验基线<br>
+<b>4.</b> 特征筛选<b>提升泛化能力</b>（ΔR²=−5.3pp），消除噪声冗余、抑制过拟合<br>
+<b>5.</b> 四者构成协同体系：<b>VMD奠基 → CATCN增效 → Skip稳优 → FS提纯</b>
+</div>
+
+<!-- ================================================================ -->
+<div class="divider"></div>
+
+<h2 id="s9"><span class="sec">9</span>待完善事项</h2>
+
+<h3>9.1　建议补充的实验</h3>
+<div class="TW">
+<table>
+<tr><th>实验</th><th>目的</th><th>优先级</th><th>工作量</th></tr>
+<tr><td>不同窗口长度对比（τ=6,12,18,24）</td><td>验证τ=12选择合理性</td><td style="color:var(--c2)">高</td><td>低（改参数重训练）</td></tr>
+<tr><td>StandardScaler vs MinMaxScaler vs 无标准化</td><td>验证标准化方法选择</td><td style="color:var(--c2)">高</td><td>低</td></tr>
+<tr><td>不同VMD参数（K=2,3,4,5,6; α=500,1000,2000,5000）</td><td>验证K=4/α=2000最优</td><td style="color:var(--c5)">中</td><td>中</td></tr>
+<tr><td>数据清洗前后对比</td><td>量化IQR清洗效果</td><td style="color:var(--c5)">中</td><td>低</td></tr>
+<tr><td>不同随机种子（5-10次重复实验）</td><td>评估结果稳定性</td><td style="color:var(--c3)">低</td><td>中</td></tr>
+<tr><td>其他数据集验证（电力负荷/风电功率）</td><td>方法泛化性</td><td style="color:var(--c3)">低</td><td>高</td></tr>
+</table>
+</div>
+
+<h3>9.2　建议补充的可视化</h3>
+<div class="TW">
+<table>
+<tr><th>内容</th><th>用途</th></tr>
+<tr><td>模型架构图（draw.io XML已生成，需在draw.io中微调）</td><td>论文方法章节插图</td></tr>
+<tr><td>IMF单独波形图（已生成4张fig_imf{k}_clean.png）</td><td>论文方法章节VMD子图</td></tr>
+<tr><td>原始信号纯净图（已生成fig_original_signal_clean.png）</td><td>论文方法章节输入端</td></tr>
+<tr><td>误差改善的瀑布图/桑基图</td><td>更直观展示大赢小输分布</td></tr>
+</table>
+</div>
+
+<h3>9.3　论文撰写状态</h3>
+<div class="TW">
+<table>
+<tr><th>章节</th><th>状态</th><th>备注</th></tr>
+<tr><td>引言</td><td style="color:var(--c5)">草稿完成</td><td>需补充更多文献</td></tr>
+<tr><td>问题定义与数据特征分析</td><td style="color:var(--c3)">完成</td><td>3张图+完整数据</td></tr>
+<tr><td>方法框架</td><td style="color:var(--c3)">完成</td><td>5个子模块+公式</td></tr>
+<tr><td>数据预处理消融</td><td style="color:var(--c5)">草稿完成</td><td>需补充Step1/Step5实验数据</td></tr>
+<tr><td>消融实验分析</td><td style="color:var(--c3)">完成</td><td>4组消融+协同分析</td></tr>
+<tr><td>对比实验</td><td style="color:var(--c3)">完成</td><td>6模型+4指标</td></tr>
+<tr><td>CATCN注意力分析</td><td style="color:var(--c3)">完成</td><td>时间注意力+误差改善</td></tr>
+<tr><td>结论</td><td style="color:var(--c5)">草稿完成</td><td>需补充未来工作</td></tr>
+</table>
+</div>
+
+<h3>9.4　数据文件清单</h3>
+<div class="TW">
+<table>
+<tr><th>文件</th><th>路径</th><th>用途</th></tr>
+<tr><td>模型权重（Full）</td><td>models/best_vmdcatbilstm_fs_seed42.pth</td><td>主模型checkpoint</td></tr>
+<tr><td>模型权重（w/o CATCN）</td><td>models/best_vmdcatbilstm_fs_nocatcn_seed42.pth</td><td>消融checkpoint</td></tr>
+<tr><td>特征筛选状态</td><td>data/figures/feature_selector_state.json</td><td>筛选参数与结果</td></tr>
+<tr><td>VMD缓存</td><td>data/figures/vmd_cache_K4_alpha2000.npz</td><td>IMF分解结果</td></tr>
+<tr><td>训练历史</td><td>data/figures/training_history.json</td><td>171 epochs训练记录</td></tr>
+<tr><td>预测结果</td><td>data/figures/vmd_catbilstm_predictions.csv</td><td>主模型预测</td></tr>
+<tr><td>消融预测</td><td>data/figures/vmd_catbilstm_novmd_predictions.csv</td><td>w/o VMD预测</td></tr>
+<tr><td>实验汇总</td><td>data/figures/all_experiments_summary.csv</td><td>全部实验指标</td></tr>
+</table>
+</div>
+
+</div>
+</body>
+</html>

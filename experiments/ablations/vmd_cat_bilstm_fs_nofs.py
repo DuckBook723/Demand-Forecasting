@@ -266,8 +266,10 @@ class VMD_CAT_BiLSTM_NoFS(nn.Module):
     """
     def __init__(self, input_dim, catcn_hidden=32, catcn_output=16,
                  catcn_layers=2, bilstm_hidden=32, bilstm_layers=1,
-                 unified_dim=32, dropout=0.3):
+                 unified_dim=32, dropout=0.3,pred_hidden_dims=None):
         super().__init__()
+        if pred_hidden_dims is None:
+            pred_hidden_dims = [16, 8]  # 降参：原[32, 16]
         self.catcn = CATCN(input_dim, catcn_hidden, catcn_output,
                            num_layers=catcn_layers, dropout=dropout)
         self.tabilstm = TABiLSTM(input_dim, bilstm_hidden,
@@ -275,7 +277,7 @@ class VMD_CAT_BiLSTM_NoFS(nn.Module):
         self.fusion = GateFusion(local_dim=catcn_output,
                                   global_dim=bilstm_hidden * 2,
                                   unified_dim=unified_dim)
-        self.head = PredictionHead(unified_dim, hidden_dims=[32, 16],
+        self.head = PredictionHead(unified_dim, hidden_dims=pred_hidden_dims,
                                     dropout=dropout)
 
     def forward(self, x):
@@ -562,7 +564,13 @@ def run_vmd_catbilstm_experiment(epochs=300, patience=30, lr=5e-4,
     data_dict, train_demand, val_demand, test_demand = load_vmd_catbilstm_data(seq_len=12)
 
     input_dim = data_dict["input_dim"]
-    model = VMD_CAT_BiLSTM_NoFS(input_dim=input_dim)
+    model = VMD_CAT_BiLSTM_NoFS(
+        input_dim=input_dim,
+        catcn_hidden=16,  # 与主模型一致，原32
+        bilstm_hidden=24,  # 与主模型一致，原32
+        unified_dim=24,  # 与主模型一致，原32
+        pred_hidden_dims=[16, 8]  # 与主模型一致，原[32,16]
+    )
 
     model = train_model(model, data_dict, epochs, patience, lr, device)
     preds, trues, metrics = evaluate_model(model, data_dict, device)

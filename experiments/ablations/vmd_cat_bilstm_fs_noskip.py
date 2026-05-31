@@ -590,19 +590,17 @@ class VMD_CAT_BiLSTM_NoSkip(nn.Module):
     直接输出预测值，而非 delta + demand[t]
     """
 
-    def __init__(self, input_dim, catcn_hidden=32, catcn_output=16,
-                 catcn_layers=2, bilstm_hidden=32, bilstm_layers=1,
-                 unified_dim=32, dropout=0.3):
+    # ✅ 修改后代码
+    def __init__(self, input_dim, catcn_hidden=16, catcn_output=16, catcn_layers=2, bilstm_hidden=24, bilstm_layers=1,
+                 unified_dim=24, dropout=0.3, pred_hidden_dims=None):  # 降参与新增参数
         super().__init__()
-        self.catcn = CATCN(input_dim, catcn_hidden, catcn_output,
-                           num_layers=catcn_layers, dropout=dropout)
-        self.tabilstm = TABiLSTM(input_dim, bilstm_hidden,
-                                  num_layers=bilstm_layers, dropout=dropout)
-        self.fusion = GateFusion(local_dim=catcn_output,
-                                  global_dim=bilstm_hidden * 2,
-                                  unified_dim=unified_dim)
-        self.head = PredictionHead(unified_dim, hidden_dims=[32, 16],
-                                    dropout=dropout)
+        if pred_hidden_dims is None:
+            pred_hidden_dims = [16, 8]  # 降参：原[32, 16]
+
+        self.catcn = CATCN(input_dim, catcn_hidden, catcn_output, num_layers=catcn_layers, dropout=dropout)
+        self.tabilstm = TABiLSTM(input_dim, bilstm_hidden, num_layers=bilstm_layers, dropout=dropout)
+        self.fusion = GateFusion(local_dim=catcn_output, global_dim=bilstm_hidden * 2, unified_dim=unified_dim)
+        self.head = PredictionHead(unified_dim, hidden_dims=pred_hidden_dims, dropout=dropout)  # 传入参数
 
     def forward(self, x):
         # 【消融】注释掉需求残差跳连相关的 demand_last 提取
@@ -692,7 +690,7 @@ def load_vmd_catbilstm_data(seq_len=12, K=VMD_K, use_feature_selection=True):
         y_for_fs = train_demand[1:]
 
         feature_selector = ConsensusFeatureSelector(
-            protected_names=['demand'],
+            protected_names=['demand','IMF1', 'IMF2', 'IMF3', 'IMF4'],
             corr_threshold=0.05,
             redundancy_threshold=0.85,
             random_state=RANDOM_SEED,
@@ -911,7 +909,14 @@ def run_vmd_catbilstm_experiment(epochs=300, patience=30, lr=5e-4,
         seq_len=12, use_feature_selection=use_feature_selection)
 
     input_dim = data_dict["input_dim"]
-    model = VMD_CAT_BiLSTM_NoSkip(input_dim=input_dim)
+    # ✅ 修改后代码
+    model = VMD_CAT_BiLSTM_NoSkip(
+        input_dim=input_dim,
+        catcn_hidden=16,  # 与主模型一致，原32
+        bilstm_hidden=24,  # 与主模型一致，原32
+        unified_dim=24,  # 与主模型一致，原32
+        pred_hidden_dims=[16, 8]  # 与主模型一致，原[32,16]
+    )
 
     model = train_model(model, data_dict, epochs, patience, lr, device)
     preds, trues, metrics = evaluate_model(model, data_dict, device)
