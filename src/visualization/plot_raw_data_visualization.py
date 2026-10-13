@@ -1,8 +1,10 @@
 """
-原始数据可视化 — 中文核心期刊出版级 (多物资自适应版)
-使用方法:
-  python plot_raw_data_visualization.py          # 默认 MAT001
-  python plot_raw_data_visualization.py MAT002   # 指定物资
+原始需求数据可视化（多物资自适应），画出时序全景、特征关联与季节性/ACF 三类图。
+
+默认处理 MAT001，也可在命令行指定物资：
+  python plot_raw_data_visualization.py
+  python plot_raw_data_visualization.py MAT002
+输出到 figures/raw_data_visualization/<物资>/。
 """
 
 import os
@@ -20,7 +22,7 @@ from scipy.stats import spearmanr
 from sklearn.feature_selection import mutual_info_regression
 from statsmodels.tsa.stattools import acf, pacf
 
-# ===================== 多物资动态切换 (必须在导入config前完成) =====================
+# ---- 多物资动态切换（须在导入 config 前完成） ----
 # 支持命令行参数: python plot_raw_data_visualization.py MAT002
 if len(sys.argv) > 1:
     os.environ["MATERIAL_SCENARIO"] = sys.argv[1].upper()
@@ -56,7 +58,7 @@ try:
 except AttributeError:
     HAS_CUSTOM_FONT = False
 
-# ===================== 项目路径 =====================
+# ---- 项目路径 ----
 PROJECT_ROOT = os.path.abspath(os.path.join(
     os.path.dirname(__file__), '..', '..'))
 sys.path.insert(0, PROJECT_ROOT)
@@ -65,7 +67,7 @@ from src.data.preprocess import (
     load_raw_data, clean_data_train, clean_data_with_stats, split_by_time
 )
 
-# ===================== 字体配置 =====================
+# ---- 字体配置 ----
 if HAS_CUSTOM_FONT:
     try:
         fm.fontManager.addfont(FONT_DEJAVUSANS)
@@ -79,7 +81,7 @@ else:
 
 plt.rcParams['axes.unicode_minus'] = False
 
-# ===================== 出版级全局配置 =====================
+# ---- 全局排版配置 ----
 plt.rcParams.update({
     'font.size': 12,
     'axes.titlesize': 14,
@@ -100,11 +102,11 @@ plt.rcParams.update({
     'axes.labelweight': 'normal',
 })
 
-# ===================== 路径配置 (按物资隔离) =====================
+# ---- 输出路径（按物资隔离） ----
 SAVE_DIR = os.path.join(FIGURES_DIR, 'raw_data_visualization', _CURRENT_MATERIAL.lower())
 os.makedirs(SAVE_DIR, exist_ok=True)
 
-# ===================== 配色方案 =====================
+# ---- 配色方案 ----
 COLOR_DEMAND = '#2C3E50'
 COLOR_TREND = '#E74C3C'
 COLOR_SEASON = '#2980B9'
@@ -123,7 +125,7 @@ EXTERNAL_LABELS_CN = [
     '负荷', '老化率', '招标强度', '新能源', '春节',
 ]
 
-# ★ 全24维特征元数据 (与主模型 ConsensusFeatureSelector 完全一致)
+# 全24维特征元数据（与主模型 ConsensusFeatureSelector 一致）
 ALL_FEATURE_NAMES = [
     'temperature', 'extreme_weather_days', 'wind_speed',
     'macro_invest_growth', 'gdp_growth', 'copper_price_index',
@@ -160,7 +162,7 @@ VMD_K = 4
 VMD_ALPHA = 2000
 
 
-# ======================== 数据加载 ========================
+# ---- 数据加载 ----
 
 def load_raw_demand():
     """加载需求序列与外部特征"""
@@ -259,7 +261,7 @@ def _vmd_decompose(signal, K=VMD_K, alpha=VMD_ALPHA, cache_path=None):
     return u_corrected
 
 
-# ======================== 通用工具 ========================
+# ---- 通用工具 ----
 
 def save_figure(fig, name, formats=('png', 'pdf')):
     paths = []
@@ -335,9 +337,7 @@ def add_year_ticks(ax, dates, step=3):
     ax.set_xticklabels(labels, rotation=30, ha='right')
 
 
-# =====================================================================
-# 图1: 需求时序全景图
-# =====================================================================
+# ---- 图1: 需求时序全景图 ----
 def plot_demand_overview(demand, dates, n_train, n_trainval, material_name):
     fig = plt.figure(figsize=(14, 8))
     gs = GridSpec(2, 1, figure=fig, hspace=0.30,
@@ -371,7 +371,7 @@ def plot_demand_overview(demand, dates, n_train, n_trainval, material_name):
               alpha=0.5, label='年内季节性模板')
 
     ax_a.set_ylabel('需求量', fontsize=12)
-    # ★ 动态标题：使用传入的物资名称
+    # 标题使用传入的物资名称
     ax_a.set_title(f'{material_name}月度需求时序全景', fontsize=14, pad=8)
     ax_a.legend(loc='upper right', fontsize=8, framealpha=0.85, ncol=2)
     ax_a.grid(True, alpha=0.15, ls='--')
@@ -444,9 +444,7 @@ def plot_demand_overview(demand, dates, n_train, n_trainval, material_name):
     return save_figure(fig, 'fig_demand_overview')
 
 
-# =====================================================================
-# 图2: 需求与特征关联分析
-# =====================================================================
+# ---- 图2: 需求与特征关联分析 ----
 def plot_feature_correlation(demand, full_df, n_train,
                              X_full=None, y_full=None,
                              fs_state=None, material_name=''):
@@ -457,9 +455,7 @@ def plot_feature_correlation(demand, full_df, n_train,
 
     train_df = full_df.iloc[:n_train]
 
-    # ============================================================
-    # (a) 外部特征与需求的关联强度
-    # ============================================================
+    # ---- (a) 外部特征与需求的关联强度 ----
     ax_a = fig.add_subplot(gs[0])
     n_features = len(EXTERNAL_COLS)
 
@@ -542,9 +538,7 @@ def plot_feature_correlation(demand, full_df, n_train,
     ax_a.set_ylim(0, max(max(sp_corrs), max(mi_norm)) * 1.25)
     ax_a.set_xlim(-0.5, n_features - 0.5)
 
-    # ============================================================
-    # (b) 全24维特征间相关性热力图
-    # ============================================================
+    # ---- (b) 全24维特征间相关性热力图 ----
     ax_b = fig.add_subplot(gs[1])
 
     if X_full is not None and y_full is not None:
@@ -716,9 +710,7 @@ def plot_feature_correlation(demand, full_df, n_train,
     return save_figure(fig, 'fig_feature_correlation')
 
 
-# =====================================================================
-# 图3: 需求季节性规律与时间依赖结构
-# =====================================================================
+# ---- 图3: 需求季节性规律与时间依赖结构 ----
 def plot_seasonality_and_acf(demand, dates, n_train, n_trainval, material_name):
     fig = plt.figure(figsize=(14, 8))
     gs = GridSpec(1, 2, figure=fig, wspace=0.30,
@@ -873,9 +865,7 @@ def plot_seasonality_and_acf(demand, dates, n_train, n_trainval, material_name):
     return save_figure(fig, 'fig_seasonality_acf')
 
 
-# =====================================================================
-# 附: 纯净原始信号图
-# =====================================================================
+# ---- 附: 纯净原始信号图 ----
 def plot_clean_original_signal(demand, material_name):
     fig, ax = plt.subplots(figsize=(7, 1.6))
     fig.subplots_adjust(left=0.04, right=0.98, top=0.96, bottom=0.06)
@@ -891,9 +881,7 @@ def plot_clean_original_signal(demand, material_name):
     return save_figure(fig, 'fig_original_signal_clean', formats=('png',))
 
 
-# =====================================================================
-# 主函数
-# =====================================================================
+# ---- 主函数 ----
 def main():
     print('=' * 60)
     print(f'  原始数据可视化 — 物资: {_CURRENT_MATERIAL} ({MATERIAL_NAME})')

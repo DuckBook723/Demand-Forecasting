@@ -1,18 +1,10 @@
 """
-文件位置: src/features/feature_selector.py
-作用: 双重特征选择——斯皮尔曼相关性初筛 + 随机森林重要性精筛
-所包含的函数:
-  - load_train_data(): 加载训练集数据，划分x和y
-  - spearman_correlation_analysis(): 斯皮尔曼相关性分析
-  - random_forest_importance(): 随机森林特征重要性评估
-  - dual_feature_select(): 执行双重筛选并保存结果
-是否需要创建: 是，本文件需要创建
-相关文件更新:
-  - 读取 data/processed/train.csv
-  - 输出 data/features/selected_features.json, data/features/feature_evaluation.csv
+双重特征筛选：斯皮尔曼相关系数初筛 + 随机森林重要性精筛，取 Top-N 特征。
+
+读取 data/processed/train.csv，输出 selected_features.json 与 feature_evaluation.csv。
 """
 
-# ======================== 0. 引入包 =======================
+# ---- 引入依赖 ----
 import os
 import sys
 import json
@@ -31,23 +23,9 @@ from configs.config import (
     FEATURE_EVALUATION_FILE_PATH,       # 特征评估保存文件路径
 )
 
-# ======================== 1. 加载训练集数据，划分x和y =======================
+# ---- 加载训练集，划分 X 和 y ----
 def load_train_data(path: str, demand_col: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    加载训练数据并分离特征和目标变量。
-
-    从指定的CSV文件路径读取数据，自动解析'date'列为日期类型并将其设置为索引，
-    然后将数据分为特征集(X)和目标变量(y)两部分。
-
-    Args:
-        path (str): CSV文件的路径，文件需包含'date'列和需求列。
-        demand_col (str): 需求目标列的列名，将从数据中分离出来作为目标变量。
-
-    Returns:
-        tuple[pd.DataFrame, pd.DataFrame]: 包含两个元素的元组：
-            - df_x: 删除了需求列后的特征DataFrame
-            - df_y: 仅包含需求列的目标变量Series
-    """
+    """读取 CSV（date 作索引），拆出特征 X 和目标 y；IMF 与残差列一并剔除。"""
     df = pd.read_csv(path, parse_dates=['date'], index_col='date')
 
     cols2drop = [demand_col]
@@ -65,52 +43,21 @@ def load_train_data(path: str, demand_col: str) -> tuple[pd.DataFrame, pd.DataFr
         df_y
     )
 
-# ======================== 2. 斯皮尔曼相关性分析 =======================
+# ---- 斯皮尔曼相关性初筛 ----
 def spearman_correlation_analysis(x: pd.DataFrame, y: pd.Series, threshold: float) -> tuple[pd.Series, np.ndarray]:
-    """
-    基于Spearman相关系数进行特征相关性分析。
-
-    计算每个特征变量与目标变量之间的Spearman秩相关系数，
-    并根据给定的阈值筛选出高相关性的特征（支持处理缺失值）。
-
-    Args:
-        x (pd.DataFrame): 特征数据框，包含待分析的特征变量。
-        y (pd.Series): 目标变量序列。
-        threshold (float): 相关性阈值，用于筛选高相关性特征（基于绝对值）。
-
-    Returns:
-        tuple[pd.Series, np.ndarray]: 包含两个元素的元组：
-            - corr_series: 每个特征与目标变量的Spearman相关系数Series，索引为特征名
-            - mask: 布尔数组，标识哪些特征的绝对相关系数超过阈值
-    """
+    """计算各特征与目标的 Spearman 秩相关系数（缺失值跳过），返回系数与 |ρ| 超阈值的掩码。"""
     cols = x.columns
     corrs = [spearmanr(x[col], y, nan_policy='omit')[0] for col in cols]
     corr_series = pd.Series(corrs, index=cols)
     mask = np.abs(corrs) > threshold
     return corr_series, mask
 
-# ======================== 3. 随机森林特征重要性评估 =======================
+# ---- 随机森林重要性精筛 ----
 def random_forest_importance(x: pd.DataFrame, y: pd.Series, mask: np.ndarray[bool], top_n: int) -> tuple[pd.Series, list]:
-    """
-    基于随机森林模型计算特征重要性并筛选Top N重要特征。
-
-    使用随机森林回归模型对已通过初步筛选的特征进行训练，
-    根据特征重要性评分选择最重要的前N个特征。
-
-    Args:
-        x (pd.DataFrame): 特征数据框，包含所有待评估的特征变量。
-        y (pd.DataFrame): 目标变量数据框。
-        mask (np.ndarray[bool]): 布尔掩码数组，标识哪些特征已通过初步筛选。
-        top_n (int): 需要选择的top N个最重要特征的数量。
-
-    Returns:
-        tuple[np.ndarray[bool], pd.Series]: 包含两个元素的元组：
-            - mask: 新的布尔掩码数组，仅标记Top N重要特征为True
-            - importances: 每个特征的重要性评分Series，索引为特征名
-    """
+    """在初筛通过的特征上训练随机森林，返回重要性评分与按评分选出的 Top-N 特征名。"""
     selected_cols = x.columns[mask]
-    # print(f"🚀 开始特征筛选 | 原始特征数: {len(x.columns)}")
-    # print(f"✅ 特征筛选完成 | 选取特征数: {len(selected_cols)}")
+    # print(f"开始特征筛选 | 原始特征数: {len(x.columns)}")
+    # print(f"特征筛选完成 | 选取特征数: {len(selected_cols)}")
     # print(x[selected_cols])
     rf = RandomForestRegressor(n_estimators=200, random_state=42, n_jobs=-1)
     rf.fit(x[selected_cols], y)
@@ -124,24 +71,9 @@ def random_forest_importance(x: pd.DataFrame, y: pd.Series, mask: np.ndarray[boo
         top_features
     )
 
-# ======================== 4. 双重特征筛选并保存结果 =======================
+# ---- 双重筛选并保存结果 ----
 def dual_feature_select(x: pd.DataFrame, y: pd.Series, threshold: float, top_n: int) -> None:
-    """
-    执行双重特征选择流程，结合Spearman相关性分析和随机森林重要性评估。
-
-    首先使用Spearman相关系数进行初步筛选，去除与目标变量相关性较低的特征；
-    然后在剩余特征上应用随机森林模型，根据特征重要性评分选择Top-N个最重要特征。
-    最终将筛选结果和评估指标保存到指定目录。
-
-    Args:
-        x (pd.DataFrame): 特征数据框，包含所有待筛选的特征变量。
-        y (pd.Series): 目标变量序列。
-        threshold (float): Spearman相关性阈值（绝对值），用于初步筛选特征。
-        top_n (int): 最终需要选择的Top N个最重要特征的数量。
-
-    Returns:
-        None: 该函数不返回值，但会将结果保存到文件系统中。
-    """
+    """串联两个筛选步骤，把最终特征列表和评估表（Spearman 系数 + RF 重要性）写入磁盘。"""
     os.makedirs(FEATURES_DIR, exist_ok=True)
     os.makedirs(FIGURES_DIR, exist_ok=True)
     corr_series, mask = spearman_correlation_analysis(x, y, threshold)
@@ -162,7 +94,7 @@ def dual_feature_select(x: pd.DataFrame, y: pd.Series, threshold: float, top_n: 
     eval_df.to_csv(FEATURE_EVALUATION_FILE_PATH)
     print(f"💾 特征评估已保存至: {FEATURE_EVALUATION_FILE_PATH}")
 
-# ========================= 测试 =======================
+# ---- 测试 ----
 if __name__ == '__main__':
     # 1. 加载数据
     x, y = load_train_data(TRAIN_FILE_PATH, DEMAND_COL)

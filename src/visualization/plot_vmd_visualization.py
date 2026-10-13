@@ -1,9 +1,10 @@
 """
-VMD分解可视化 --- 中文核心期刊出版级 (多物资自适应版)
+单物资 VMD 分解可视化，画时域分解、频谱与重建/消融三类图（多物资自适应）。
 
-使用方法:
-  python plot_vmd_visualization.py          # 默认 MAT001
-  python plot_vmd_visualization.py MAT002   # 指定物资
+可在命令行指定物资场景，例如：
+  python plot_vmd_visualization.py
+  python plot_vmd_visualization.py MAT002
+输出到 figures/vmd_visualization/<物资>/。
 """
 
 import os
@@ -20,7 +21,7 @@ from matplotlib.ticker import AutoMinorLocator
 from scipy.signal import periodogram
 from pathlib import Path
 
-# ===================== 多物资动态切换 (必须在导入config前完成) =====================
+# ---- 多物资动态切换（须在导入 config 前完成） ----
 
 if len(sys.argv) > 1:
     os.environ["MATERIAL_SCENARIO"] = sys.argv[1].upper()
@@ -58,7 +59,7 @@ try:
 except AttributeError:
     HAS_CUSTOM_FONT = False
 
-# ===================== 项目路径 =====================
+# ---- 项目路径 ----
 
 PROJECT_ROOT = os.path.abspath(os.path.join(
     os.path.dirname(__file__), '..', '..'))
@@ -68,7 +69,7 @@ from src.data.preprocess import (
     load_raw_data, clean_data_train, clean_data_with_stats, split_by_time
 )
 
-# ===================== 字体配置 (多级容错) =====================
+# ---- 字体配置（多级容错） ----
 
 if HAS_CUSTOM_FONT:
     try:
@@ -83,7 +84,7 @@ else:
 
 plt.rcParams['axes.unicode_minus'] = False
 
-# ===================== 出版级全局配置 =====================
+# ---- 全局排版配置 ----
 
 plt.rcParams.update({
     'font.size': 10,
@@ -105,13 +106,13 @@ plt.rcParams.update({
     'axes.labelweight': 'normal',
 })
 
-# ===================== 路径配置 (按物资隔离) =====================
+# ---- 输出路径（按物资隔离） ----
 
 SAVE_DIR = os.path.join(FIGURES_DIR, 'vmd_visualization', _CURRENT_MATERIAL.lower())
 os.makedirs(SAVE_DIR, exist_ok=True)
 os.makedirs(DATA_FIGURES_DIR, exist_ok=True)
 
-# ===================== 配色方案 (学术出版级) =====================
+# ---- 配色方案 ----
 
 COLOR_ORIG = '#2C3E50'
 COLOR_IMF = ['#C0392B', '#2980B9', '#27AE60', '#E67E22']
@@ -131,10 +132,10 @@ try:
 except ImportError:
     VMD = None
 
-# ======================== 数据加载 ========================
+# ---- 数据加载 ----
 
 def load_demand_signal():
-    """加载需求序列，返回与主模型完全一致的数切分点"""
+    """加载需求序列，返回与主模型一致的数据切分点"""
     df = load_raw_data(SIM_DATASET_PATH)
     train_raw, val_raw, test_raw = split_by_time(df, TRAIN_RATIO, VAL_RATIO)
     train_clean, clean_stats = clean_data_train(train_raw)
@@ -186,10 +187,10 @@ def vmd_decompose(signal, K=VMD_K, alpha=VMD_ALPHA, cache_path=None):
 
     return u_corrected
 
-# ======================== 通用工具 ========================
+# ---- 通用工具 ----
 
 def save_figure(fig, name, formats=('png', 'pdf')):
-    """统一保存: PNG(预览) + PDF(矢量出版)"""
+    """统一保存为 PNG（预览）与 PDF（矢量）"""
     paths = []
     for fmt in formats:
         p = os.path.join(SAVE_DIR, f'{name}.{fmt}')
@@ -266,9 +267,7 @@ def add_year_ticks(ax, dates, step=3):
     ax.set_xticks(positions)
     ax.set_xticklabels(labels, rotation=30, ha='right')
 
-# =====================================================================
-# 图1: VMD分解时域图
-# =====================================================================
+# ---- 图1: VMD分解时域图 ----
 
 def plot_vmd_decomposition(demand, dates, imfs, K, n_train, n_trainval, material_name):
     n_panels = K + 1
@@ -283,7 +282,7 @@ def plot_vmd_decomposition(demand, dates, imfs, K, n_train, n_trainval, material
     mean_v = demand.mean()
     ax.axhline(mean_v, color='gray', ls=':', lw=0.5, alpha=0.5)
     ax.set_ylabel('需求量', fontsize=9)
-    # ★ 动态标题
+    # 标题使用物资名称
     ax.set_title(f'{material_name}月度需求VMD分解 (K={K}, α={VMD_ALPHA})', fontsize=12, pad=8)
     ax.legend(loc='upper right', framealpha=0.85, edgecolor='#ccc')
     ax.grid(True, alpha=0.15, ls='--')
@@ -345,9 +344,7 @@ def plot_vmd_decomposition(demand, dates, imfs, K, n_train, n_trainval, material
 
     return save_figure(fig, 'fig_vmd_decomposition')
 
-# =====================================================================
-# 图1b: 单独IMF图 (示意图用)
-# =====================================================================
+# ---- 图1b: 单独IMF图（示意图用） ----
 
 def plot_individual_imfs(imfs, K):
     paths = []
@@ -372,9 +369,7 @@ def plot_individual_imfs(imfs, K):
         paths.append(save_figure(fig, f'fig_imf{k+1}_clean', formats=('png',)))
     return paths
 
-# =====================================================================
-# 图2: 各IMF频谱分析图 (上下布局)
-# =====================================================================
+# ---- 图2: 各IMF频谱分析图（上下布局） ----
 
 def plot_vmd_spectrum(demand, imfs, K, material_name):
     fig, (ax_top, ax_bot) = plt.subplots(2, 1, figsize=(10, 7.5))
@@ -437,9 +432,7 @@ def plot_vmd_spectrum(demand, imfs, K, material_name):
 
     return save_figure(fig, 'fig_vmd_spectrum')
 
-# =====================================================================
-# 图3: VMD重建验证 + 消融对比
-# =====================================================================
+# ---- 图3: VMD重建验证 + 消融对比 ----
 
 def plot_vmd_reconstruction(demand, dates, imfs, K, n_train, n_trainval, material_name):
     recon = imfs.sum(axis=0)
@@ -451,9 +444,7 @@ def plot_vmd_reconstruction(demand, dates, imfs, K, n_train, n_trainval, materia
                   top=0.93, bottom=0.08, left=0.08, right=0.96,
                   height_ratios=[1, 1])
 
-    # ================================================================
-    # (a) 重建精度验证 — 截取局部年份
-    # ================================================================
+    # ---- (a) 重建精度验证（截取局部年份） ----
     ax_a = fig.add_subplot(gs[0, 0])
 
     z_start = max(0, n_train - 24)
@@ -510,9 +501,7 @@ def plot_vmd_reconstruction(demand, dates, imfs, K, n_train, n_trainval, materia
         spine.set_linewidth(0.4)
         spine.set_color('#999')
 
-    # ================================================================
-    # (b) 消融对比 / IMF能量占比
-    # ================================================================
+    # ---- (b) 消融对比 / IMF能量占比 ----
     ax_b = fig.add_subplot(gs[0, 1])
     novmd_path = os.path.join(DATA_FIGURES_DIR, "vmd_catbilstm_novmd_predictions.csv")
     full_path  = os.path.join(DATA_FIGURES_DIR, "vmd_catbilstm_predictions.csv")
@@ -574,9 +563,7 @@ def plot_vmd_reconstruction(demand, dates, imfs, K, n_train, n_trainval, materia
         ax_b.grid(True, axis='x', alpha=0.15, ls='--')
         ax_b.set_xlim(0, max(pcts) * 1.40)
 
-    # ================================================================
-    # (c) 滚动能量贡献 — 全局视图
-    # ================================================================
+    # ---- (c) 滚动能量贡献（全局视图） ----
     ax_c = fig.add_subplot(gs[1, :])
     window = 24
 
@@ -599,7 +586,7 @@ def plot_vmd_reconstruction(demand, dates, imfs, K, n_train, n_trainval, materia
         bottom += roll_pct[k]
 
     ax_c.axvspan(z_start, z_end, alpha=0.08, color=COLOR_ACCENT, zorder=0)
-    # ★ 补全截断处：标注局部放大区间
+    # 标注局部放大区间
     ax_c.text((z_start + z_end) / 2, 105, f'局部放大区间\n({z_start}-{z_end})',
               ha='center', va='bottom', fontsize=7, color=COLOR_ACCENT, fontweight='bold', alpha=0.7)
 
@@ -629,9 +616,7 @@ def plot_vmd_reconstruction(demand, dates, imfs, K, n_train, n_trainval, materia
 
     return save_figure(fig, 'fig_vmd_reconstruction')
 
-# =====================================================================
-# 主函数
-# =====================================================================
+# ---- 主函数 ----
 
 def main():
     print('=' * 60)

@@ -1,9 +1,8 @@
 """
-文件位置: experiments/ablations/vmd_cat_bilstm_fs_noskip.py
-作用: 消融实验 — 去除需求残差跳连 (w/o Skip)
-      保留: VMD + FS(16维) + CATCN + BiLSTM + GateFusion + PredictionHead
-      修改: 直接预测原始需求，不做 delta + demand[t]
-      输入仍包含 demand 特征（公平对比），仅移除跳连机制
+消融实验：去掉需求残差跳连，模型直接预测原始需求。
+
+VMD、特征筛选(16维)、CATCN、BiLSTM、GateFusion、PredictionHead 都保留。
+输入仍包含 demand 特征以便公平对比，但不再做 delta + demand[t] 的相加。
 """
 
 import os
@@ -64,7 +63,7 @@ from configs.config import (
 warnings.filterwarnings("ignore")
 
 
-# ==================== 全局随机种子 ====================
+# ---- 全局随机种子 ----
 def seed_everything(seed: int = 42):
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
@@ -104,9 +103,7 @@ os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(DATA_FIGURES_DIR, exist_ok=True)
 
 
-# ========================================================================
-# Part 1: 多方法共识特征筛选器（与主模型完全一致）
-# ========================================================================
+# ---- Part 1: 多方法共识特征筛选器（与主模型一致） ----
 class ConsensusFeatureSelector:
     FEATURE_NAMES = [
         'temperature', 'extreme_weather_days', 'wind_speed',
@@ -417,9 +414,7 @@ class ConsensusFeatureSelector:
         print(f" 💾 筛选器已保存: {path}")
 
 
-# ========================================================================
-# Part 2: VMD 分解（与主模型完全一致）
-# ========================================================================
+# ---- Part 2: VMD 分解（与主模型一致） ----
 def vmd_decompose(signal, K=VMD_K, alpha=VMD_ALPHA, tau=VMD_TAU,
                   dc=VMD_DC, init=VMD_INIT, tol=VMD_TOL, cache_path=None):
     if cache_path and os.path.exists(cache_path):
@@ -433,9 +428,7 @@ def vmd_decompose(signal, K=VMD_K, alpha=VMD_ALPHA, tau=VMD_TAU,
     return u, u_hat, omega
 
 
-# ========================================================================
-# Part 3: 模型架构（唯一修改处：去除跳连）
-# ========================================================================
+# ---- Part 3: 模型架构（唯一修改处：去除跳连） ----
 class CausalConv1d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, dilation=1):
         super().__init__()
@@ -584,15 +577,14 @@ class PredictionHead(nn.Module):
 
 class VMD_CAT_BiLSTM_NoSkip(nn.Module):
     """
-    【消融修改点】去除需求残差跳连
-    保留: FS(16维) + CATCN + BiLSTM + GateFusion + PredictionHead
-    输入仍包含 demand 特征（公平对比），但不做 +demand[t] 操作
-    直接输出预测值，而非 delta + demand[t]
+    消融版模型：去掉需求残差跳连。
+
+    输入仍保留 demand 特征以便公平对比，但 forward 直接输出预测值，不做 +demand[t]。
     """
 
-    # ✅ 修改后代码
+    # 修改处：forward 不再做残差相加
     def __init__(self, input_dim, catcn_hidden=16, catcn_output=16, catcn_layers=2, bilstm_hidden=24, bilstm_layers=1,
-                 unified_dim=24, dropout=0.3, pred_hidden_dims=None):  # 降参与新增参数
+                 unified_dim=24, dropout=0.3, pred_hidden_dims=None):  # 预测头隐藏层维度，可覆盖
         super().__init__()
         if pred_hidden_dims is None:
             pred_hidden_dims = [16, 8]  # 降参：原[32, 16]
@@ -600,10 +592,10 @@ class VMD_CAT_BiLSTM_NoSkip(nn.Module):
         self.catcn = CATCN(input_dim, catcn_hidden, catcn_output, num_layers=catcn_layers, dropout=dropout)
         self.tabilstm = TABiLSTM(input_dim, bilstm_hidden, num_layers=bilstm_layers, dropout=dropout)
         self.fusion = GateFusion(local_dim=catcn_output, global_dim=bilstm_hidden * 2, unified_dim=unified_dim)
-        self.head = PredictionHead(unified_dim, hidden_dims=pred_hidden_dims, dropout=dropout)  # 传入参数
+        self.head = PredictionHead(unified_dim, hidden_dims=pred_hidden_dims, dropout=dropout)
 
     def forward(self, x):
-        # 【消融】注释掉需求残差跳连相关的 demand_last 提取
+        # 跳连已去除，不再提取 demand_last
         # demand_last = x[:, -1, -1]
 
         f_local = self.catcn(x)
@@ -611,15 +603,12 @@ class VMD_CAT_BiLSTM_NoSkip(nn.Module):
         fused = self.fusion(f_local, f_global)
         deep_delta = self.head(fused)
 
-        # 【关键修改】直接输出预测值，不做残差相加
-        # 原主模型: out = deep_delta + 1.0 * demand_last
+        # 直接输出预测值，不做残差相加（主模型为 out = deep_delta + 1.0 * demand_last）
         out = deep_delta
         return out
 
 
-# ========================================================================
-# Part 4: 数据加载（与主模型完全一致）
-# ========================================================================
+# ---- Part 4: 数据加载（与主模型一致） ----
 def load_vmd_catbilstm_data(seq_len=12, K=VMD_K, use_feature_selection=True):
     print("📂 加载数据（VMD-CAT-BiLSTM + 特征筛选版）...")
     df = load_raw_data(SIM_DATASET_PATH)
@@ -768,9 +757,7 @@ def load_vmd_catbilstm_data(seq_len=12, K=VMD_K, use_feature_selection=True):
     }, train_demand, val_demand, test_demand
 
 
-# ========================================================================
-# Part 5: 训练（与主模型完全一致）
-# ========================================================================
+# ---- Part 5: 训练（与主模型一致） ----
 def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda"):
     print(f"\n{'=' * 50}")
     print("🏋️ 开始训练（w/o Skip：直接预测原始需求）")
@@ -858,9 +845,7 @@ def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda
     return model
 
 
-# ========================================================================
-# Part 6: 评估（与主模型完全一致）
-# ========================================================================
+# ---- Part 6: 评估（与主模型一致） ----
 def evaluate_model(model, data_dict, device="cuda"):
     model.eval()
     test_loader = data_dict["test_loader"]
@@ -890,9 +875,7 @@ def evaluate_model(model, data_dict, device="cuda"):
     return preds, trues, metrics
 
 
-# ========================================================================
-# Part 7: 实验主函数
-# ========================================================================
+# ---- Part 7: 实验主函数 ----
 def run_vmd_catbilstm_experiment(epochs=300, patience=30, lr=5e-4,
                                   device="cuda",
                                   use_feature_selection=True) -> pd.DataFrame:
@@ -909,7 +892,7 @@ def run_vmd_catbilstm_experiment(epochs=300, patience=30, lr=5e-4,
         seq_len=12, use_feature_selection=use_feature_selection)
 
     input_dim = data_dict["input_dim"]
-    # ✅ 修改后代码
+    # 消融模型：直接预测原始需求
     model = VMD_CAT_BiLSTM_NoSkip(
         input_dim=input_dim,
         catcn_hidden=16,  # 与主模型一致，原32
@@ -986,9 +969,7 @@ def run_vmd_catbilstm_experiment(epochs=300, patience=30, lr=5e-4,
     return results_df
 
 
-# ========================================================================
-# Part 8: 主入口
-# ========================================================================
+# ---- Part 8: 主入口 ----
 if __name__ == "__main__":
     seed_everything(seed=RANDOM_SEED)
     os.makedirs(MODELS_DIR, exist_ok=True)

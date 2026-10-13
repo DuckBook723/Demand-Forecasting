@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>论文图像源数据 CSV 文件说明</title>
+    <style>
+        :root {
+            --primary: #2C3E50;
+            --accent: #D32F2F;
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --border: #dee2e6;
+            --text: #212529;
+            --text-muted: #6c757d;
+            --code-bg: #f0f2f5;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            padding: 0;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2C3E50 0%, #1a252f 100%);
+            color: white;
+            padding: 48px 24px 36px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            font-size: 15px;
+            opacity: 0.85;
+            max-width: 720px;
+            margin: 0 auto;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 20px 60px;
+        }
+
+        .toc {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px 28px;
+            margin-bottom: 28px;
+        }
+
+        .toc h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+            color: var(--primary);
+        }
+
+        .toc ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .toc ul li {
+            padding: 4px 0;
+        }
+
+        .toc ul li a {
+            color: #0056b3;
+            text-decoration: none;
+            font-size: 15px;
+        }
+
+        .toc ul li a:hover {
+            text-decoration: underline;
+        }
+
+        .section {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 28px 32px;
+            margin-bottom: 24px;
+        }
+
+        .section h2 {
+            font-size: 22px;
+            color: var(--primary);
+            border-bottom: 3px solid var(--accent);
+            padding-bottom: 8px;
+            margin-bottom: 18px;
+        }
+
+        .section h3 {
+            font-size: 18px;
+            color: #333;
+            margin: 20px 0 10px;
+        }
+
+        .section h4 {
+            font-size: 15px;
+            color: var(--primary);
+            margin: 14px 0 6px;
+        }
+
+        .section p {
+            margin-bottom: 10px;
+            font-size: 14.5px;
+        }
+
+        .file-path {
+            background: var(--code-bg);
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 13px;
+            border-left: 4px solid var(--accent);
+            margin: 10px 0 16px;
+            word-break: break-all;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 12px 0 18px;
+            font-size: 14px;
+        }
+
+        table th {
+            background: #2C3E50;
+            color: white;
+            padding: 8px 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        table td {
+            padding: 7px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        table tr:hover {
+            background: #e9ecef;
+        }
+
+        .tag {
+            display: inline-block;
+            background: #e7f0ff;
+            color: #0056b3;
+            padding: 1px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: 'SF Mono', monospace;
+            margin: 1px;
+        }
+
+        .tag-float {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .tag-int {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .tag-str {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .image-preview {
+            margin: 16px 0;
+            text-align: center;
+        }
+
+        .image-preview img {
+            max-width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .image-preview .caption {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+
+        .code-block {
+            background: #1e1e2e;
+            color: #cdd6f4;
+            padding: 14px 18px;
+            border-radius: 8px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 10px 0 16px;
+            line-height: 1.6;
+        }
+
+        .code-block .comment {
+            color: #6c7086;
+        }
+
+        .code-block .keyword {
+            color: #cba6f7;
+        }
+
+        .code-block .string {
+            color: #a6e3a1;
+        }
+
+        .code-block .func {
+            color: #89b4fa;
+        }
+
+        .file-list {
+            margin: 12px 0;
+        }
+
+        .file-list-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-bottom: 8px;
+            background: #fafafa;
+        }
+
+        .file-list-item .icon {
+            font-size: 20px;
+            color: var(--primary);
+        }
+
+        .file-list-item .name {
+            font-weight: 600;
+            font-family: 'SF Mono', monospace;
+            font-size: 13px;
+            color: var(--primary);
+        }
+
+        .file-list-item .desc {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-blue {
+            background: #cfe2ff;
+            color: #084298;
+        }
+
+        .badge-green {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .badge-red {
+            background: #f8d7da;
+            color: #842029;
+        }
+
+        .badge-purple {
+            background: #e2d9f3;
+            color: #5a2a6e;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <h1>论文图像源数据 — CSV 文件说明</h1>
+        <p>本文档描述由 JSON 源数据转换生成的三个 CSV 文件，供项目团队成员理解和使用。</p>
+    </div>
+
+    <div class="container">
+
+        <!-- ==================== 目录 ==================== -->
+        <div class="toc">
+            <h2>目录</h2>
+            <ul>
+                <li><a href="#overview">1. 文件概览</a></li>
+                <li><a href="#forecast">2. 预测曲线对比图数据 (<code>forecast_curves_data_from_json.csv</code>)</a></li>
+                <li><a href="#vmd-signal">3. VMD 信号数据 (<code>vmd_signal_data_from_json.csv</code>)</a></li>
+                <li><a href="#vmd-stats">4. VMD 统计特征数据 (<code>vmd_imf_stats_from_json.csv</code>)</a></li>
+                <li><a href="#usage">5. 使用示例</a></li>
+                <li><a href="#images">6. 对应论文图像预览</a></li>
+                <li><a href="#tools">7. 相关脚本工具</a></li>
+            </ul>
+        </div>
+
+        <!-- ==================== 1. 文件概览 ==================== -->
+        <div class="section" id="overview">
+            <h2>1. 文件概览</h2>
+            <p>以下三个 CSV 文件由 <code>src/visualization/json_to_csv_converter.py</code> 从绘图时导出的 JSON
+                源数据转换而来，数据已通过验证脚本校验，<strong>与原始绘图数据完全一致</strong>。</p>
+
+            <div class="file-list">
+                <div class="file-list-item">
+                    <span class="icon">&#128200;</span>
+                    <div>
+                        <div class="name">forecast_curves_data_from_json.csv</div>
+                        <div class="desc">预测曲线对比图 — 各模型预测值与真实值（长格式）</div>
+                    </div>
+                    <span class="badge badge-blue">1,134 行</span>
+                    <span class="badge badge-green">5 列</span>
+                </div>
+                <div class="file-list-item">
+                    <span class="icon">&#127760;</span>
+                    <div>
+                        <div class="name">vmd_signal_data_from_json.csv</div>
+                        <div class="desc">VMD 分解结果图 — 全序列时序信号与模态分量</div>
+                    </div>
+                    <span class="badge badge-blue">1,116 行</span>
+                    <span class="badge badge-green">8 列</span>
+                </div>
+                <div class="file-list-item">
+                    <span class="icon">&#128202;</span>
+                    <div>
+                        <div class="name">vmd_imf_stats_from_json.csv</div>
+                        <div class="desc">VMD 分解结果图 — 各模态数理统计特征</div>
+                    </div>
+                    <span class="badge badge-blue">12 行</span>
+                    <span class="badge badge-green">12 列</span>
+                </div>
+            </div>
+
+            <p style="font-size:13px; color:var(--text-muted);">
+                <strong>存储位置：</strong><br>
+                <code
+                    style="background:#f0f2f5;padding:2px 6px;border-radius:3px;">figures/forecast_curves/forecast_curves_data_from_json.csv</code><br>
+                <code
+                    style="background:#f0f2f5;padding:2px 6px;border-radius:3px;">figures/vmd_visualization/combined_final/vmd_signal_data_from_json.csv</code><br>
+                <code
+                    style="background:#f0f2f5;padding:2px 6px;border-radius:3px;">figures/vmd_visualization/combined_final/vmd_imf_stats_from_json.csv</code>
+            </p>
+        </div>
+
+        <!-- ==================== 2. 预测曲线数据 ==================== -->
+        <div class="section" id="forecast">
+            <h2>2. 预测曲线对比图数据</h2>
+            <div class="file-path">figures/forecast_curves/forecast_curves_data_from_json.csv</div>
+
+            <h3>数据来源</h3>
+            <p>该文件由 <code>figures/forecast_curves/fig_forecast_curves_comparison_data.json</code> 转换而来。
+                原始 JSON 由 <code>src/visualization/plot_forecast_curves.py</code> 在绘图时导出，
+                包含了三种物资在五种模型上的预测值和真实值。</p>
+
+            <h3>列说明</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>列名</th>
+                        <th>类型</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>material_id</code></td>
+                        <td><span class="tag tag-str">str</span></td>
+                        <td>物资编号：<code>001</code>（10kV油浸式变压器）、<code>002</code>（架空绝缘导线）、<code>003</code>（智能电表）</td>
+                    </tr>
+                    <tr>
+                        <td><code>material_name</code></td>
+                        <td><span class="tag tag-str">str</span></td>
+                        <td>物资中文名称</td>
+                    </tr>
+                    <tr>
+                        <td><code>model</code></td>
+                        <td><span class="tag tag-str">str</span></td>
+                        <td>模型名称：<code>真实值</code>、<code>本文框架</code>、<code>VMD-LSTM</code>、<code>XGBoost</code>、<code>LSTM</code>、<code>ARIMA</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><code>time_step</code></td>
+                        <td><span class="tag tag-int">int</span></td>
+                        <td>测试集时间步序号（从0开始）</td>
+                    </tr>
+                    <tr>
+                        <td><code>value</code></td>
+                        <td><span class="tag tag-float">float</span></td>
+                        <td>需求量值（原始物理单位）</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>数据格式说明</h3>
+            <p>采用 <strong>长格式（Tidy Data）</strong>，每行表示某个物资在某个时间步下某个模型的预测值（或真实值）。
+                通过 <code>material_id</code> + <code>model</code> 的组合可以筛选出任意一条曲线数据。
+                三种物资 × 6种模型（含真实值）共 1,134 条记录。</p>
+        </div>
+
+        <!-- ==================== 3. VMD 信号数据 ==================== -->
+        <div class="section" id="vmd-signal">
+            <h2>3. VMD 信号数据</h2>
+            <div class="file-path">figures/vmd_visualization/combined_final/vmd_signal_data_from_json.csv</div>
+
+            <h3>数据来源</h3>
+            <p>该文件由
+                <code>figures/vmd_visualization/combined_final/fig_vmd_combined_multi_material_final_data.json</code>
+                中的 <code>_signal_table</code> 字段转换而来。包含了三种物资在全时间序列上的原始需求值和 VMD 分解后的四个模态分量值。
+            </p>
+
+            <h3>列说明</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>列名</th>
+                        <th>类型</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>material_id</code></td>
+                        <td><span class="tag tag-str">str</span></td>
+                        <td>物资编号（001 / 002 / 003）</td>
+                    </tr>
+                    <tr>
+                        <td><code>material_name</code></td>
+                        <td><span class="tag tag-str">str</span></td>
+                        <td>物资中文名称</td>
+                    </tr>
+                    <tr>
+                        <td><code>date</code></td>
+                        <td><span class="tag tag-str">str</span></td>
+                        <td>时间日期（YYYY-MM-DD 格式，月频数据）</td>
+                    </tr>
+                    <tr>
+                        <td><code>demand</code></td>
+                        <td><span class="tag tag-float">float</span></td>
+                        <td>原始需求序列值</td>
+                    </tr>
+                    <tr>
+                        <td><code>IMF1</code></td>
+                        <td><span class="tag tag-float">float</span></td>
+                        <td>VMD 第1模态 — 趋势分量</td>
+                    </tr>
+                    <tr>
+                        <td><code>IMF2</code></td>
+                        <td><span class="tag tag-float">float</span></td>
+                        <td>VMD 第2模态 — 低频分量</td>
+                    </tr>
+                    <tr>
+                        <td><code>IMF3</code></td>
+                        <td><span class="tag tag-float">float</span></td>
+                        <td>VMD 第3模态 — 中频分量</td>
+                    </tr>
+                    <tr>
+                        <td><code>IMF4</code></td>
+                        <td><span class="tag tag-float">float</span></td>
+                        <td>VMD 第4模态 — 高频分量</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>数据说明</h3>
+            <p>四个 IMF 分量之和约等于原始 <code>demand</code> 值（VMD 重构决定系数 R² 接近 0.81~0.97）。
+                三种物资的全序列数据合并在一个 CSV 中，通过 <code>material_id</code> 区分，每种物资 372 条时间记录。</p>
+        </div>
+
+        <!-- ==================== 4. VMD 统计特征数据 ==================== -->
+        <div class="section" id="vmd-stats">
+            <h2>4. VMD 统计特征数据</h2>
+            <div class="file-path">figures/vmd_visualization/combined_final/vmd_imf_stats_from_json.csv</div>
+
+            <h3>数据来源</h3>
+            <p>该文件由 JSON 中的 <code>_imf_stats</code> 和 <code>_reconstruction</code> 字段转换而来。
+                提供了三种物资各 IMF 模态的数理统计指标，包括方差贡献率、主导周期频、VMD 重构精度等。</p>
+
+            <h3>列说明</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>列名</th>
+                        <th>类型</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>material_id</code></td>
+                        <td><span class="tag tag-str">str</span></td>
+                        <td>物资编号</td>
+                    </tr>
+                    <tr>
+                        <td><code>material_name</code></td>
+                        <td><span class="tag tag-str">str</span></td>
+                        <td>物资名称</td>
+                    </tr>
+                    <tr>
+                        <td><code>IMF</code></td>
+                        <td><span class="tag tag-str">str</span></td>
+                        <td>IMF 编号（IMF1 / IMF2 / IMF3 / IMF4）</td>
+                    </tr>
+                    <tr>
+                        <td><code>label</code></td>
+                        <td><span class="tag tag-str">str</span></td>
+                        <td>物理含义标签（趋势 / 低频 / 中频 / 高频）</td>
+                    </tr>
+                    <tr>
+                        <td><code>mean</code></td>
+                        <td><span class="tag tag-float">float</span></td>
+                        <td>该模态的均值</td>
+                    </tr>
+                    <tr>
+                        <td><code>std</code></td>
+                        <td><span class="tag tag-float">float</span></td>
+                        <td>该模态的标准差</td>
+                    </tr>
+                    <tr>
+                        <td><code>var_pct</code></td>
+                        <td><span class="tag tag-float">float</span></td>
+                        <td>方差贡献率（占原始信号总方差的百分比）</td>
+                    </tr>
+                    <tr>
+                        <td><code>dominant_freq</code></td>
+                        <td><span class="tag tag-float">float</span></td>
+                        <td>主导频率</td>
+                    </tr>
+                    <tr>
+                        <td><code>dominant_period_months</code></td>
+                        <td><span class="tag tag-float">float</span></td>
+                        <td>主导周期（月）</td>
+                    </tr>
+                    <tr>
+                        <td><code>reconstruction_R2</code></td>
+                        <td><span class="tag tag-float">float</span></td>
+                        <td>VMD 重构决定系数 R²（每行重复）</td>
+                    </tr>
+                    <tr>
+                        <td><code>reconstruction_RMSE</code></td>
+                        <td><span class="tag tag-float">float</span></td>
+                        <td>VMD 重构均方根误差（每行重复）</td>
+                    </tr>
+                    <tr>
+                        <td><code>reconstruction_MAE</code></td>
+                        <td><span class="tag tag-float">float</span></td>
+                        <td>VMD 重构平均绝对误差（每行重复）</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>数据说明</h3>
+            <p>每条物资对应 4 行（4 个 IMF），共 12 行数据。<code>reconstruction_*</code> 三列在同一物资的 4 行中重复出现，
+                表示该物资全序列 VMD 重构的整体精度指标。</p>
+        </div>
+
+        <!-- ==================== 5. 使用示例 ==================== -->
+        <div class="section" id="usage">
+            <h2>5. 使用示例</h2>
+
+            <h3>Python 读取示例</h3>
+            <div class="code-block">
+                <span class="keyword">import</span> pandas <span class="keyword">as</span> pd<br><br>
+
+                <span class="comment"># 读取预测曲线数据</span><br>
+                df_forecast = pd.read_csv(<span
+                    class="string">'figures/forecast_curves/forecast_curves_data_from_json.csv'</span>, dtype={<span
+                    class="string">'material_id'</span>: <span class="func">str</span>})<br>
+                <span class="func">print</span>(df_forecast.head())<br><br>
+
+                <span class="comment"># 筛选物资 001 的"本文框架"预测值</span><br>
+                df_001_ours = df_forecast[<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;(df_forecast[<span class="string">'material_id'</span>] == <span
+                    class="string">'001'</span>) &<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;(df_forecast[<span class="string">'model'</span>] == <span
+                    class="string">'本文框架'</span>)<br>
+                ]<br><br>
+
+                <span class="comment"># 读取 VMD 信号数据</span><br>
+                df_vmd = pd.read_csv(<span
+                    class="string">'figures/vmd_visualization/combined_final/vmd_signal_data_from_json.csv'</span>,
+                dtype={<span class="string">'material_id'</span>: <span class="func">str</span>})<br>
+                <span class="func">print</span>(df_vmd.head())<br><br>
+
+                <span class="comment"># 读取 VMD 统计特征</span><br>
+                df_stats = pd.read_csv(<span
+                    class="string">'figures/vmd_visualization/combined_final/vmd_imf_stats_from_json.csv'</span>,
+                dtype={<span class="string">'material_id'</span>: <span class="func">str</span>})<br>
+                <span class="func">print</span>(df_stats.groupby(<span class="string">'material_id'</span>)[[<span
+                    class="string">'var_pct'</span>, <span class="string">'dominant_period_months'</span>]].<span
+                    class="func">describe</span>())
+            </div>
+
+            <h3>Excel 打开方式</h3>
+            <p>CSV 文件使用 UTF-8-BOM 编码，直接用 Excel 打开即可正常显示中文：</p>
+            <ol style="margin-left:20px;font-size:14px;">
+                <li>打开 Excel → <strong>数据</strong> → <strong>自文本/CSV</strong></li>
+                <li>选择对应的 CSV 文件，编码选择 <strong>UTF-8</strong></li>
+                <li>使用筛选功能按 <code>material_id</code>、<code>model</code> 等列快速过滤</li>
+                <li>或使用数据透视表进行汇总分析</li>
+            </ol>
+        </div>
+
+        <!-- ==================== 6. 对应论文图像预览 ==================== -->
+        <div class="section" id="images">
+            <h2>6. 对应论文图像预览</h2>
+
+            <h3>图像一：预测曲线对比与误差分布图</h3>
+            <div class="image-preview">
+                <img src="images/fig_forecast_curves_from_csv.png" alt="预测曲线对比图"
+                    style="max-width:100%;border:1px solid #dee2e6;border-radius:8px;">
+                <div class="caption">基于 CSV 数据重绘的预测曲线对比图<br>
+                    <code style="font-size:12px;">figures/forecast_curves/fig_forecast_curves_from_csv.png</code>
+                </div>
+            </div>
+
+            <h3>图像二：VMD 分解结果及频谱图</h3>
+            <div class="image-preview">
+                <img src="images/fig_vmd_combined_from_csv.png" alt="VMD分解结果图"
+                    style="max-width:100%;border:1px solid #dee2e6;border-radius:8px;">
+                <div class="caption">基于 CSV 数据重绘的 VMD 分解总图<br>
+                    <code
+                        style="font-size:12px;">figures/vmd_visualization/combined_final/fig_vmd_combined_from_csv.png</code>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== 7. 相关脚本工具 ==================== -->
+        <div class="section" id="tools">
+            <h2>7. 相关脚本工具</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>脚本</th>
+                        <th>功能</th>
+                        <th>使用方式</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>src/visualization/json_to_csv_converter.py</code></td>
+                        <td>将 JSON 源数据转换为 CSV</td>
+                        <td><code>python src/visualization/json_to_csv_converter.py</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>src/visualization/validate_json_to_csv.py</code></td>
+                        <td>验证 CSV 与原始代码计算结果一致性</td>
+                        <td><code>python src/visualization/validate_json_to_csv.py</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>src/visualization/plot_forecast_curves_from_csv.py</code></td>
+                        <td>基于 CSV 绘制预测曲线对比图</td>
+                        <td><code>python src/visualization/plot_forecast_curves_from_csv.py</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>src/visualization/plot_vmd_visualization_from_csv.py</code></td>
+                        <td>基于 CSV 绘制 VMD 分解总图</td>
+                        <td><code>python src/visualization/plot_vmd_visualization_from_csv.py</code></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <div class="footer">
+        <p>Demand-Forecasting 项目 — 论文图像源数据 CSV 说明文档</p>
+        <p>生成时间：2025年 &nbsp;|&nbsp; 项目地址：<code>src/visualization/</code></p>
+    </div>
+
+</body>
+
+</html>

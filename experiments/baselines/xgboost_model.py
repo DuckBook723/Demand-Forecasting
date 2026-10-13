@@ -1,13 +1,5 @@
-"""
-文件位置: experiments/baselines/xgboost_model.py
-作用: XGBoost 对比基线 —— 使用原始全部外部特征(不依赖特征选择文件)
-
-改动说明:
-  1. 移除对 FEATURE_SELECTION_FILE_PATH 的依赖;
-  2. 使用原始全部11维外部特征 + 自动衍生滞后/滚动统计/差分特征;
-  3. 保留原始特征列(不再删除)，让XGBoost自行评估重要性;
-  4. 与单物资单区域数据格式(grid_material_demand_sim.csv)兼容。
-"""
+"""XGBoost 对比基线，直接使用全部 11 维原始外部特征，不依赖特征选择文件，
+由模型自行评估各特征重要性，兼容单物资单区域数据格式。"""
 
 import os
 import random
@@ -30,7 +22,7 @@ from configs.config import (
 warnings.filterwarnings("ignore")
 
 
-# ==================== 0. 原始全部外部特征定义 ====================
+# ---- 原始外部特征 ----
 # 与 generate_data_enhanced.py 输出列完全一致(单物资单区域版)
 RAW_EXTERNAL_COLS = [
     "temperature",
@@ -47,7 +39,7 @@ RAW_EXTERNAL_COLS = [
 ]
 
 
-# ==================== 全局随机种子固定 ====================
+# ---- 全局随机种子 ----
 def seed_everything(seed: int = 42):
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
@@ -57,7 +49,7 @@ def seed_everything(seed: int = 42):
     print(f"   NumPy 版本: {np.__version__}")
 
 
-# ==================== 底层训练核心 ====================
+# ---- 底层训练 ----
 def _train_xgb_core(X_train, y_train, X_val, y_val, params, num_boost_round, early_stopping_rounds=None):
     dtrain = xgb.DMatrix(X_train, label=y_train)
     dval = xgb.DMatrix(X_val, label=y_val)
@@ -99,25 +91,21 @@ def _train_xgb_core(X_train, y_train, X_val, y_val, params, num_boost_round, ear
     return model, best_iteration
 
 
-# ==================== 1. 特征工程(基于全部原始特征) ====================
+# ---- 特征工程 ----
 def build_features(df, target_col, external_cols=None, seq_len=12, keep_raw=True):
-    """
-    基于全部原始外部特征构建衍生特征。
-
-    Args:
-        keep_raw: True=保留原始外部特征列, False=仅保留衍生特征(原逻辑)
-    """
+    """基于全部原始外部特征构建衍生特征；keep_raw 为 True 时保留原始外部特征列，
+    否则只保留衍生特征。"""
     df_feat = df.copy()
     if not isinstance(df_feat.index, pd.DatetimeIndex) and "date" in df_feat.columns:
         df_feat = df_feat.set_index("date")
 
-    # --- 1.1 需求滞后与差分 ---
+    # ---- 需求滞后与差分 ----
     for lag in range(1, seq_len + 1):
         df_feat[f"demand_lag_{lag}"] = df_feat[target_col].shift(lag)
     df_feat["demand_diff_1"] = df_feat[target_col].diff(1).shift(1)
     df_feat["demand_diff_12"] = df_feat[target_col].diff(12).shift(1)
 
-    # --- 1.2 需求滚动统计 ---
+    # ---- 需求滚动统计 ----
     for window in [3, 6, 12]:
         df_feat[f"demand_roll_mean_{window}"] = (
             df_feat[target_col].shift(1).rolling(window=window, min_periods=1).mean()
@@ -127,24 +115,24 @@ def build_features(df, target_col, external_cols=None, seq_len=12, keep_raw=True
             df_feat[target_col].shift(1).rolling(window=window, min_periods=1).std()
         )
 
-    # --- 1.3 外部特征滞后(基于全部原始特征) ---
+    # ---- 外部特征滞后 ----
     for col in external_cols or []:
         if col in df_feat.columns:
             for lag in [1, 2, 3]:
                 df_feat[f"ext_{col}_lag_{lag}"] = df_feat[col].shift(lag)
 
-    # --- 1.4 时间特征 ---
+    # ---- 时间特征 ----
     df_feat["month"] = df_feat.index.month
     df_feat["quarter"] = df_feat.index.quarter
     if "is_spring_festival" in df_feat.columns:
         df_feat["is_spring_festival"] = df_feat["is_spring_festival"].fillna(0).astype(int)
 
-    # --- 1.5 目标列 ---
+    # ---- 目标列 ----
     df_feat["target"] = df_feat[target_col]
     if target_col in df_feat.columns:
         df_feat = df_feat.drop(columns=[target_col])
 
-    # --- 1.6 列清理 ---
+    # ---- 列清理 ----
     # 删除非特征列(物资/区域标识等)，但保留原始外部特征(若 keep_raw=True)
     id_cols = ["region", "material_id", "material_name", "material_type", "year"]
     drop_cols = [c for c in id_cols if c in df_feat.columns]
@@ -157,11 +145,9 @@ def build_features(df, target_col, external_cols=None, seq_len=12, keep_raw=True
     return df_feat
 
 
-# ==================== 2. 数据加载(使用全部原始特征) ====================
+# ---- 数据加载 ----
 def load_xgb_data(seq_len=12, keep_raw_features=True):
-    """
-    加载数据并使用全部原始外部特征(不依赖特征选择文件)。
-    """
+    """加载数据并使用全部原始外部特征，不依赖特征选择文件。"""
     print("📂 加载原始数据(全部特征版)...")
     df = load_raw_data(SIM_DATASET_PATH)
 
@@ -191,7 +177,7 @@ def load_xgb_data(seq_len=12, keep_raw_features=True):
     return train_feat, val_feat, test_feat
 
 
-# ==================== 3. 训练 ====================
+# ---- 训练 ----
 def train_xgb(train_df, val_df=None, params=None):
     feature_cols = [c for c in train_df.columns if c != "target"]
     X_train, y_train = train_df[feature_cols].values, train_df["target"].values
@@ -230,7 +216,7 @@ def train_xgb(train_df, val_df=None, params=None):
     }
 
 
-# ==================== 4. 评估 ====================
+# ---- 评估 ----
 def evaluate_xgb(model, test_df, feature_cols):
     X_test, y_true = test_df[feature_cols].values, test_df["target"].values
     y_pred = np.maximum(model.predict(X_test), 0)
@@ -246,7 +232,7 @@ def evaluate_xgb(model, test_df, feature_cols):
     }
 
 
-# ==================== 5. 超参搜索 ====================
+# ---- 超参搜索 ----
 def search_hyperparameters(train_df, val_df):
     feature_cols = [c for c in train_df.columns if c != "target"]
     X_train, y_train = train_df[feature_cols].values, train_df["target"].values
@@ -292,7 +278,7 @@ def search_hyperparameters(train_df, val_df):
     return best_params
 
 
-# ==================== 6. 特征重要性分析 ====================
+# ---- 特征重要性 ----
 def analyze_feature_importance(model, feature_cols, top_n=20, save_dir=None):
     if hasattr(model, "_Booster") and model._Booster is not None:
         importance_dict = model._Booster.get_score(importance_type="weight")
@@ -329,7 +315,7 @@ def analyze_feature_importance(model, feature_cols, top_n=20, save_dir=None):
     return feat_imp
 
 
-# ==================== 7. 实验主函数 ====================
+# ---- 实验主流程 ----
 def run_xgb_experiment(search=False, seq_len=SEQ_LEN, keep_raw_features=True):
     print("\n" + "=" * 70)
     print("🧪 XGBoost 对比实验 (全部原始特征版)")
@@ -360,6 +346,14 @@ def run_xgb_experiment(search=False, seq_len=SEQ_LEN, keep_raw_features=True):
     print("📊 测试集评估")
     print(f"{'=' * 50}")
     eval_results = evaluate_xgb(model, test_df, feature_cols)
+    X_test, y_true = test_df[feature_cols].values, test_df["target"].values
+    y_pred = np.maximum(model.predict(X_test), 0)
+    pred_csv_path = os.path.join(DATA_FIGURES_DIR, "xgboost_predictions.csv")
+    pd.DataFrame({
+        "true_demand": y_true,
+        "pred_demand": y_pred,
+    }).to_csv(pred_csv_path, index=False)
+    print(f"💾 预测曲线数据已保存: {pred_csv_path}")
     print(f" RMSE:  {eval_results['RMSE']:.4f}")
     print(f" MAE:   {eval_results['MAE']:.4f}")
     print(f" MAPE:  {eval_results['MAPE']:.2f}%")
@@ -417,7 +411,7 @@ def run_xgb_experiment(search=False, seq_len=SEQ_LEN, keep_raw_features=True):
     return results_df
 
 
-# ==================== 主入口 ====================
+# ---- 主入口 ----
 if __name__ == "__main__":
     seed_everything(seed=42)
     run_xgb_experiment(search=True, keep_raw_features=True)

@@ -1,19 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-三种物资 VMD 分解统一总图 —— 论文终稿排版增强版（全序列计算 + 局部视窗截取）
+三种物资 VMD 分解统一总图（全序列计算 + 局部视窗截取）。
 
-功能：
-1. 自动循环三种物资场景: 001 / 002 / 003，调用项目标准 preprocess 管道。
-2. 在全序列上运行 VMD(K=4, alpha=2000)，确保分解结果与主模型完全一致，无局部截取带来的边界效应。
-3. 下方分量展示图精准截取特征时段，并在顶部增加横跨三列的全序列总览图，用虚线框指示截取时段。
-4. 论文终稿级排版：
-   - 顶部全序列总览图（独立网格，物理隔离防重叠）
-   - 下方特征时段展示图（5行 × 3列，第1行为原始信号，第2~5行为 IMF1~IMF4）
-5. 精细微调：公共行标签外移、信息框减淡、超低饱和度填充、精简时间刻度。
-6. 导出完美适配 LaTeX/Word 的超清 PNG/PDF，并保存对应的数理矩阵（JSON/Excel）。
+依次处理 001/002/003 三种物资，每种都走项目标准 preprocess 管道读数据，并在
+全序列上做 VMD(K=4, alpha=2000)，保证分解口径与主模型一致、不引入局部截取的
+边界效应。下方分量图只截取特征时段展示，顶部再加一行全序列总览，用虚线框标出
+截取的区间。
 
-使用：
-python plot_vmd_visualization_combined_final.py
+排版为 5 行 × 3 列（第 1 行原始信号，第 2~5 行 IMF1~IMF4），公共行标签外移、
+信息框减淡、填充低饱和、时间刻度精简。导出 PNG/PDF 并保存对应的数值矩阵（JSON/Excel）。
+
+用法：
+  python plot_vmd_visualization_combined_final.py
 """
 
 import os
@@ -36,11 +34,11 @@ from scipy.signal import periodogram
 
 warnings.filterwarnings('ignore')
 
-# ===================== 项目根路径 =====================
+# ---- 项目根路径 ----
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 sys.path.insert(0, PROJECT_ROOT)
 
-# ===================== 物资映射 =====================
+# ---- 物资映射 ----
 MATERIAL_NAMES = {
     "001": "10kV油浸式变压器",
     "002": "架空绝缘导线",
@@ -49,7 +47,7 @@ MATERIAL_NAMES = {
 MATERIAL_IDS = ["001", "002", "003"]
 SUBFIG_TAGS = ["(a)", "(b)", "(c)"]
 
-# ===================== 配置导入 =====================
+# ---- 配置导入 ----
 import configs.config as cfg
 
 importlib.reload(cfg)
@@ -76,7 +74,7 @@ from src.data.preprocess import (
     split_by_time,
 )
 
-# ===================== 字体配置 =====================
+# ---- 字体配置 ----
 if HAS_CUSTOM_FONT:
     try:
         fm.fontManager.addfont(FONT_DEJAVUSANS)
@@ -90,7 +88,7 @@ else:
 
 plt.rcParams['axes.unicode_minus'] = False
 
-# ===================== 论文级全局配置 =====================
+# ---- 全局排版配置 ----
 plt.rcParams.update({
     'font.size': 8.2,
     'axes.titlesize': 10.0,
@@ -107,12 +105,12 @@ plt.rcParams.update({
     'patch.linewidth': 0.4,
 })
 
-# ===================== 保存路径 =====================
+# ---- 保存路径 ----
 SAVE_DIR = os.path.join(FIGURES_DIR, 'vmd_visualization', 'combined_final')
 os.makedirs(SAVE_DIR, exist_ok=True)
 os.makedirs(DATA_FIGURES_DIR, exist_ok=True)
 
-# ===================== 配色方案 =====================
+# ---- 配色方案 ----
 MATERIAL_COLOR_SCHEMES = {
     "001": {
         "orig": "#2C4058",  # 深蓝灰
@@ -131,7 +129,7 @@ MATERIAL_COLOR_SCHEMES = {
 ROW_LABELS = ['原始信号', 'IMF1', 'IMF2', 'IMF3', 'IMF4']
 IMF_LABELS_SHORT = ['趋势', '低频', '中频', '高频']
 
-# ===================== 论文级微调参数 =====================
+# ---- 微调参数 ----
 FILL_ALPHA_ORIG = 0.05
 FILL_ALPHA_IMF = 0.05
 
@@ -142,7 +140,7 @@ ANNOT_LW = 0.34
 ROW_LABEL_X_OFFSET = 0.062
 BOTTOM_TICK_COUNT = 4
 
-# ===================== VMD 参数 =====================
+# ---- VMD 参数 ----
 VMD_K = 4
 VMD_ALPHA = 2000
 VMD_TOL = 1e-7
@@ -152,7 +150,7 @@ try:
 except ImportError:
     VMD = None
 
-# ===================== 特征展示窗口 =====================
+# ---- 特征展示窗口 ----
 FEATURE_WINDOWS = {
     "001": ("2021-01-01", "2023-12-31"),
     "002": ("2019-01-01", "2024-12-31"),
@@ -160,7 +158,7 @@ FEATURE_WINDOWS = {
 }
 
 
-# ======================== 通用工具 ========================
+# ---- 通用工具 ----
 def save_figure(fig, name, formats=('png', 'pdf')):
     paths = []
     for fmt in formats:
@@ -216,11 +214,9 @@ def safe_float(v):
     return float(v)
 
 
-# ======================== 数据管道加载 ========================
+# ---- 数据管道加载 ----
 def load_full_demand_signal_for_material(material_id):
-    """
-    通过重载配置，调用项目标准的 preprocess 处理逻辑
-    """
+    """重载配置后，走项目标准 preprocess 逻辑读出一条完整需求序列"""
     os.environ["MATERIAL_SCENARIO"] = material_id
     import configs.config as cfg_local
     importlib.reload(cfg_local)
@@ -254,7 +250,7 @@ def load_full_demand_signal_for_material(material_id):
     return full_clean, pd.Series(dates), demand, demand_col
 
 
-# ======================== VMD 分解与统计 ========================
+# ---- VMD 分解与统计 ----
 def vmd_decompose(signal, K=4, alpha=2000, tol=1e-7):
     if VMD is None:
         raise ImportError("未检测到安装 vmdpy，请先在您的终端执行: pip install vmdpy")
@@ -285,9 +281,7 @@ def vmd_decompose(signal, K=4, alpha=2000, tol=1e-7):
 
 
 def calc_imf_stats(signal, imfs):
-    """
-    计算完整序列上各 IMF 模态的数理统计特征与重构精度
-    """
+    """在完整序列上统计各 IMF 的方差贡献、主周期，以及重构精度"""
     total_var = np.var(signal) + 1e-12
     imf_stats = []
 
@@ -325,7 +319,7 @@ def calc_imf_stats(signal, imfs):
     return imf_stats, reconstruction
 
 
-# ======================== 轴样式统一化 ========================
+# ---- 轴样式统一化 ----
 def stylize_axis(ax, show_x=False):
     ax.grid(True, linestyle='--', alpha=0.12, linewidth=0.5)
     ax.yaxis.set_major_locator(MaxNLocator(nbins=4))
@@ -336,11 +330,9 @@ def stylize_axis(ax, show_x=False):
         ax.tick_params(axis='x', labelbottom=False)
 
 
-# ======================== 总图排版构建 ========================
+# ---- 总图排版构建 ----
 def add_row_labels(fig, axes_lower):
-    """
-    在最左侧添加公共行标签，位置精细向外偏移，防止压住 Y 轴刻度
-    """
+    """在最左侧添加公共行标签，向外偏移避开 Y 轴刻度"""
     for i, label in enumerate(ROW_LABELS):
         pos = axes_lower[i, 0].get_position()
         y_center = (pos.y0 + pos.y1) / 2
@@ -356,11 +348,8 @@ def add_row_labels(fig, axes_lower):
 
 
 def build_unified_vmd_visualization():
-    """
-    核心制图函数：
-    双 GridSpec 架构设计，顶部总览行与下方分解网格形成物理隔离，彻底避免任何重叠。
-    """
-    # ======================== A. 数据准备与计算 ========================
+    """核心制图函数：双 GridSpec 布局，顶部总览行与下方分解网格分开，避免重叠"""
+    # ---- A. 数据准备与计算 ----
     material_data = {}
 
     for material_id in MATERIAL_IDS:
@@ -405,10 +394,10 @@ def build_unified_vmd_visualization():
             'imf_stats_table': pd.DataFrame(imf_stats)
         }
 
-    # ======================== B. 创建双 GridSpec 架构画布 ========================
+    # ---- B. 创建双 GridSpec 架构画布 ----
     fig = plt.figure(figsize=(15.0, 10.5))
 
-    # 物理隔离核心：通过 explicit 边界设置，强制在 0.73 到 0.81 之间留出绝对空白带
+    # 顶部与下方网格之间留一条空白带，用显式边界固定在 0.73~0.81
     gs_top = fig.add_gridspec(
         nrows=1, ncols=1,
         left=0.10, right=0.98,
@@ -432,7 +421,7 @@ def build_unified_vmd_visualization():
         for j in range(3):
             axes_lower[i, j] = fig.add_subplot(gs_bottom[i, j])
 
-    # ======================== C. 绘制顶部总览图 ========================
+    # ---- C. 绘制顶部总览图 ----
     overview_min_y, overview_max_y = np.inf, -np.inf
 
     for j, material_id in enumerate(MATERIAL_IDS):
@@ -518,7 +507,7 @@ def build_unified_vmd_visualization():
         borderpad=0.3
     )
 
-    # ======================== D. 绘制下方 5x3 截取时段分量图 ========================
+    # ---- D. 绘制下方 5x3 截取时段分量图 ----
     for j, material_id in enumerate(MATERIAL_IDS):
         data = material_data[material_id]
         scheme = MATERIAL_COLOR_SCHEMES[material_id]
@@ -538,7 +527,7 @@ def build_unified_vmd_visualization():
         ax.fill_between(x_dates, win_demand, color=color_orig, alpha=FILL_ALPHA_ORIG)
         ax.plot(x_dates, win_demand, color=color_orig, linewidth=1.0)
         stylize_axis(ax, show_x=False)
-        # 列标题设置加粗，与顶部轴完全拉开距离，绝不重叠
+        # 列标题加粗，与顶部轴留出间距
         ax.set_title(f"{SUBFIG_TAGS[j]} {MATERIAL_NAMES[material_id]}", pad=8, fontweight='bold', fontsize=9.2)
 
         start_str_box = win_dates.iloc[0].strftime("%Y-%m")
@@ -590,7 +579,7 @@ def build_unified_vmd_visualization():
     for j in range(3):
         axes_lower[-1, j].set_xlabel('时间', fontsize=8.2, fontweight='bold')
 
-    # 公共行标签外挂（利用 left=0.10 和 ROW_LABEL_X_OFFSET=0.055 物理隔离，消除与 Y 轴刻度值的碰撞）
+    # 公共行标签外挂，用偏移量避开 Y 轴刻度值
     add_row_labels(fig, axes_lower)
 
     # 论文大标题
@@ -601,7 +590,7 @@ def build_unified_vmd_visualization():
         fontweight='bold'
     )
 
-    # ======================== E. 矩阵与数据落盘 ========================
+    # ---- E. 矩阵与数据落盘 ----
     fig_name = 'fig_vmd_combined_multi_material_final'
 
     export_data = {
@@ -647,6 +636,6 @@ def build_unified_vmd_visualization():
         )
 
 
-# ======================== 主程序入口 ========================
+# ---- 主程序入口 ----
 if __name__ == '__main__':
     build_unified_vmd_visualization()

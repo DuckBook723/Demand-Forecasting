@@ -1,7 +1,4 @@
-"""
-文件位置: experiments/baselines/lstm_diff_model.py
-作用: LSTM 差分预测版 — 输出格式与消融实验对齐版
-"""
+"""LSTM 差分预测基线，先预测一阶差分再叠加基准值还原成原始需求，输出格式与消融实验对齐。"""
 
 import os
 import random
@@ -27,7 +24,7 @@ from configs.config import (
 warnings.filterwarnings("ignore")
 
 
-# ==================== 全局随机种子固定 ====================
+# ---- 全局随机种子 ----
 def seed_everything(seed: int = 42):
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
@@ -46,7 +43,7 @@ def seed_everything(seed: int = 42):
         print(f"   GPU: {torch.cuda.get_device_name(0)}")
 
 
-# ==================== 配置 ====================
+# ---- 配置 ----
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 HIDDEN_DIM = 64
 NUM_LAYERS = 2
@@ -64,7 +61,7 @@ models_file_path = os.path.join(MODELS_DIR, f"best_lstm_diff_seed{SEED}.pth")
 result_file_path = os.path.join(DATA_FIGURES_DIR, f'lstm_diff_results_seed{SEED}.csv')
 
 
-# ==================== 1. 模型定义 ====================
+# ---- 模型定义 ----
 class LSTMDiff(nn.Module):
     def __init__(self, input_dim, hidden_dim, num_layers, dropout):
         super().__init__()
@@ -84,7 +81,7 @@ class LSTMDiff(nn.Module):
         return self.fc(last_out).squeeze(-1)
 
 
-# ==================== 2. 数据加载 ====================
+# ---- 数据加载 ----
 def load_data_diff(seq_len=SEQ_LEN):
     print("📂 加载数据（差分预测模式）...")
     df = load_raw_data(SIM_DATASET_PATH)
@@ -158,7 +155,7 @@ def load_data_diff(seq_len=SEQ_LEN):
     return train_loader, val_loader, test_loader, X_train.shape[1], y_mean, y_std
 
 
-# ==================== 3. 训练函数（修复：传入 y_mean, y_std）====================
+# ---- 训练 ----
 def train_diff(model, train_loader, val_loader, epochs, lr, device, patience, y_mean, y_std):
     print(f"\n{'=' * 50}")
     print("🏋️ 开始训练（Diff-LSTM）")
@@ -204,7 +201,7 @@ def train_diff(model, train_loader, val_loader, epochs, lr, device, patience, y_
 
         scheduler.step(val_loss)
 
-        # 【修复】使用传入的 y_mean, y_std 计算验证集 R²（原始空间）
+        # 用传入的 y_mean、y_std 把验证集预测还原到原始空间后计算 R²
         val_preds_real = val_preds_z * y_std + y_mean
         val_trues_real = val_trues_z * y_std + y_mean
         vm = calculate_metrics(val_trues_real, val_preds_real, is_normalized=False)
@@ -228,7 +225,7 @@ def train_diff(model, train_loader, val_loader, epochs, lr, device, patience, y_
     return model
 
 
-# ==================== 4. 评估函数 ====================
+# ---- 评估 ----
 def evaluate_diff(model, test_loader, device, y_mean, y_std):
     model.eval()
     y_true_diff_z, y_pred_diff_z, bases = [], [], []
@@ -254,7 +251,7 @@ def evaluate_diff(model, test_loader, device, y_mean, y_std):
     return metrics, y_true_real, y_pred_real
 
 
-# ==================== 5. 主函数 ====================
+# ---- 主函数 ----
 def run_lstm_diff_experiment():
     seed_everything(seed=SEED)
     print("\n" + "=" * 70)
@@ -268,11 +265,18 @@ def run_lstm_diff_experiment():
     print(f"📦 参数量: {n_params:,}")
 
     start_time = time.time()
-    # 【修复】调用时传入 y_mean, y_std
+    # 传入 y_mean、y_std 以便训练中还原到原始空间计算 R²
     model = train_diff(model, train_loader, val_loader, EPOCHS, LEARNING_RATE, DEVICE, PATIENCE, y_mean, y_std)
     train_time = (time.time() - start_time) / 60
 
     metrics, y_true, y_pred = evaluate_diff(model, test_loader, DEVICE, y_mean, y_std)
+
+    pred_csv_path = os.path.join(DATA_FIGURES_DIR, "lstm_diff_predictions.csv")
+    pd.DataFrame({
+        "true_demand": y_true.flatten(),
+        "pred_demand": y_pred.flatten(),
+    }).to_csv(pred_csv_path, index=False)
+    print(f"💾 预测曲线数据已保存: {pred_csv_path}")
 
     print(f"\n{'=' * 50}")
     print("📊 Diff-LSTM 测试集结果")

@@ -1,14 +1,10 @@
 """
-文件位置: experiments/main_models/vmd_cat_bilstm_fs.py
-作用: 带多方法共识特征筛选的 VMD-CAT-BiLSTM
+带多方法共识特征筛选的 VMD-CAT-BiLSTM 主模型（seed=42）。
 
-创新：ConsensusFeatureSelector — 4步特征筛选流水线
-  Step 1: 相关性预筛选 (Spearman + MI → 移除无关特征)
-  Step 2: 多方法排序 → Borda计数投票 (Spearman + MI + RF + SHAP)
-  Step 3: 冗余剪枝 (高相关特征对 → 保留更重要的)
-  Step 4: Kneedle自适应截断 (自动确定最优特征数)
-
-模型架构与 R²=0.8332 基线完全一致，仅输入维度随筛选结果自动调整
+特征筛选流水线 ConsensusFeatureSelector 分四步：相关性预筛选剔除无关特征、
+四种方法(Spearman/MI/RF置换重要性/SHAP)打分后 Borda 计数投票排序、
+剪枝高相关冗余特征、最后用 Kneedle 肘部检测截断出最优特征数。
+网络结构与 R²=0.8332 的无筛选基线一致，只有输入维度随筛选结果变化。
 """
 
 import os
@@ -70,7 +66,7 @@ from configs.config import (
 warnings.filterwarnings("ignore")
 
 
-# ==================== 全局随机种子 ====================
+# ---- 全局随机种子 ----
 def seed_everything(seed: int = 42):
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
@@ -110,31 +106,15 @@ os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(DATA_FIGURES_DIR, exist_ok=True)
 
 
-# ========================================================================
-# Part 1: 多方法共识特征筛选器
-# ========================================================================
+# ---- Part 1: 多方法共识特征筛选器 ----
 class ConsensusFeatureSelector:
     """
-    多方法共识特征筛选器 (4步流水线)
+    多方法共识特征筛选器。
 
-    Step 1: 相关性预筛选 — 移除与目标无关联的噪声特征
-      Spearman |ρ| + 互信息 → 取 min(rank) → 移除底部无关特征
-
-    Step 2: 多方法排序 → Borda计数投票
-      方法1: Spearman |ρ|           (单调非线性关系)
-      方法2: 互信息 MI              (任意非线性关系)
-      方法3: RF 置换重要性           (特征交互效应)
-      方法4: SHAP 值 (或GBDT替代)   (博弈论根基)
-      → Borda计数合并4种排名，得到共识排序
-
-    Step 3: 冗余剪枝 — 移除高相关冗余特征
-      若两特征 |Spearman ρ| > threshold → 保留 Borda 分高的
-      (创新点: 多数筛选器只关注"重要性"而忽略"冗余性")
-
-    Step 4: Kneedle 自适应截断 — 自动确定最优特征数
-      肘部检测 → 在"重要性急降"处截断
-
-    受保护特征: demand (残差跳连必需，始终保留在最后一列)
+    先按相关性预筛选掉无关特征，再用 Spearman |ρ|、互信息、RF 置换重要性、
+    SHAP(不可用时用 GBDT)四种方法打分并做 Borda 计数投票，接着剪掉互相高相关的
+    冗余特征（多数筛选器只看重要性、不管冗余，这里两者都处理），最后用 Kneedle
+    肘部检测在重要性急降处截断。demand 是残差跳连的基准列，受保护并固定在最后一列。
     """
 
     # 24维特征的名称
@@ -152,11 +132,8 @@ class ConsensusFeatureSelector:
     def __init__(self, protected_names=None, corr_threshold=0.05,
                  redundancy_threshold=0.85, random_state=42):
         """
-        Args:
-            protected_names: 受保护特征名列表(不会被移除)
-            corr_threshold: 相关性预筛选阈值, |ρ|和MI都低于此值的特征被移除
-            redundancy_threshold: 冗余剪枝阈值, 两特征|ρ|高于此值时剪枝
-            random_state: 随机种子
+        protected_names 里的特征不会被移除；|ρ| 和 MI 都低于 corr_threshold 的
+        特征在预筛选中剔除，两特征 |ρ| 高于 redundancy_threshold 时做冗余剪枝。
         """
         self.protected_names = protected_names or ['demand']
         self.corr_threshold = corr_threshold
@@ -172,14 +149,7 @@ class ConsensusFeatureSelector:
         self.n_original_ = None
 
     def fit(self, X, y, feature_names=None):
-        """
-        拟合特征筛选器 (仅在训练集上调用)
-
-        Args:
-            X: (n_samples, n_features) 特征矩阵
-            y: (n_samples,) 目标变量 (demand[t+1])
-            feature_names: 特征名列表
-        """
+        """在训练集上拟合筛选器，X 为 (n_samples, n_features)，y 为 demand[t+1]。"""
         if feature_names is None:
             feature_names = self.FEATURE_NAMES[:X.shape[1]]
 
@@ -545,9 +515,7 @@ class ConsensusFeatureSelector:
         print(f" 💾 筛选器已保存: {path}")
 
 
-# ========================================================================
-# Part 2: VMD 分解
-# ========================================================================
+# ---- Part 2: VMD 分解 ----
 def vmd_decompose(signal, K=VMD_K, alpha=VMD_ALPHA, tau=VMD_TAU,
                   dc=VMD_DC, init=VMD_INIT, tol=VMD_TOL, cache_path=None):
     if cache_path and os.path.exists(cache_path):
@@ -561,9 +529,7 @@ def vmd_decompose(signal, K=VMD_K, alpha=VMD_ALPHA, tau=VMD_TAU,
     return u, u_hat, omega
 
 
-# ========================================================================
-# Part 3: 模型架构 (与 R²=0.8332 基线完全一致)
-# ========================================================================
+# ---- Part 3: 模型架构（与 R²=0.8332 基线一致） ----
 class CausalConv1d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, dilation=1):
         super().__init__()
@@ -715,10 +681,10 @@ class VMD_CAT_BiLSTM(nn.Module):
 
     def __init__(self, input_dim, catcn_hidden=16, catcn_output=16, catcn_layers=2,
                  bilstm_hidden=24, bilstm_layers=1, unified_dim=24, dropout=0.3,
-                 pred_hidden_dims=None):  # ← 新增 pred_hidden_dims 参数，修改默认隐藏层大小
+                 pred_hidden_dims=None):  # 预测头各隐藏层维度，可按需覆盖
         super().__init__()
         if pred_hidden_dims is None:
-            pred_hidden_dims = [16, 8]  # ← 默认降参配置：[32,16] -> [16,8]
+            pred_hidden_dims = [16, 8]  # 默认降参配置：[32,16] -> [16,8]
         self.catcn = CATCN(input_dim, catcn_hidden, catcn_output,
                            num_layers=catcn_layers, dropout=dropout)
         # self.catcn = nn.Linear(input_dim, catcn_hidden)
@@ -744,9 +710,7 @@ class VMD_CAT_BiLSTM(nn.Module):
         return out
 
 
-# ========================================================================
-# Part 4: 数据加载 (集成特征筛选)
-# ========================================================================
+# ---- Part 4: 数据加载（集成特征筛选） ----
 def load_vmd_catbilstm_data(seq_len=12, K=VMD_K, use_feature_selection=False):
     """加载数据 + 可选特征筛选"""
     print("📂 加载数据（VMD-CAT-BiLSTM + 特征筛选版）...")
@@ -907,9 +871,7 @@ def load_vmd_catbilstm_data(seq_len=12, K=VMD_K, use_feature_selection=False):
     }, train_demand, val_demand, test_demand
 
 
-# ========================================================================
-# Part 5: 训练 (★ 新增: 逐epoch历史记录保存)
-# ========================================================================
+# ---- Part 5: 训练（逐 epoch 记录历史） ----
 def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda"):
     print(f"\n{'=' * 50}")
     print("🏋️ 开始训练（特征筛选版）")
@@ -930,7 +892,7 @@ def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda
     y_mean_fs = data_dict["y_mean"]
     y_std_fs = data_dict["y_std"]
 
-    # ★ 新增: 逐epoch历史记录
+    # 逐 epoch 记录训练历史
     history = {
         "epoch": [],
         "train_loss": [],
@@ -960,7 +922,7 @@ def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda
             train_trues_ep.append(yb.detach().cpu().numpy())
         train_loss = total_loss / len(train_loader.dataset)
 
-        # ★ 训练集MAE (反标准化)
+        # 训练集 MAE（反标准化）
         train_preds_raw = np.concatenate(train_preds_ep).flatten() * y_std_fs + y_mean_fs
         train_trues_raw = np.concatenate(train_trues_ep).flatten() * y_std_fs + y_mean_fs
         train_mae = np.mean(np.abs(train_preds_raw - train_trues_raw))
@@ -979,7 +941,7 @@ def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda
         val_preds = np.concatenate(val_preds)
         val_trues = np.concatenate(val_trues)
 
-        # ★ 验证集指标 (反标准化)
+        # 验证集指标（反标准化）
         vp_raw = val_preds.flatten() * y_std_fs + y_mean_fs
         vt_raw = val_trues.flatten() * y_std_fs + y_mean_fs
         vp_raw = np.maximum(vp_raw, 0)
@@ -992,7 +954,7 @@ def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda
         cur_lr = optimizer.param_groups[0]['lr']
         scheduler.step()
 
-        # ★ 记录历史
+        # 记录历史
         history["epoch"].append(epoch)
         history["train_loss"].append(round(float(train_loss), 6))
         history["val_loss"].append(round(float(val_loss), 6))
@@ -1022,7 +984,7 @@ def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda
 
     model.load_state_dict(best_state)
 
-    # ★ 保存训练历史到JSON
+    # 保存训练历史到 JSON
     history_path = os.path.join(DATA_FIGURES_DIR, "training_history.json")
     with open(history_path, 'w') as f:
         json.dump(history, f, indent=2)
@@ -1040,9 +1002,7 @@ def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda
     return model
 
 
-# ========================================================================
-# Part 6: 评估
-# ========================================================================
+# ---- Part 6: 评估 ----
 def evaluate_model(model, data_dict, device="cuda"):
     model.eval()
     test_loader = data_dict["test_loader"]
@@ -1073,9 +1033,7 @@ def evaluate_model(model, data_dict, device="cuda"):
     return preds, trues, metrics
 
 
-# ========================================================================
-# Part 7: 实验主函数
-# ========================================================================
+# ---- Part 7: 实验主函数 ----
 def run_vmd_catbilstm_experiment(epochs=300, patience=30, lr=5e-4,
                                   device="cuda",
                                   use_feature_selection=True) -> pd.DataFrame:
@@ -1176,9 +1134,7 @@ def run_vmd_catbilstm_experiment(epochs=300, patience=30, lr=5e-4,
     return results_df
 
 
-# ========================================================================
-# Part 8: 主入口
-# ========================================================================
+# ---- Part 8: 主入口 ----
 if __name__ == "__main__":
     seed_everything(seed=RANDOM_SEED)
     os.makedirs(MODELS_DIR, exist_ok=True)

@@ -1,22 +1,11 @@
 """
-文件位置: src/models/trainer.py
-作用: 模型训练与评估流程管理
-      提供完整的训练循环，支持两种模型类型：
-        - 'vmd': 输入为 (imfs, externals) 的VMD分解模型
-        - 'single': 输入为 (x) 的单路输入模型
-      包括单epoch训练、验证集评估、指标计算（RMSE/MAE/MAPE/R²），
-      以及主训练循环（最优模型保存、训练记录维护）。
-      支持端到端DAE训练的辅助重构损失：当模型包含DAE编码器时，
-      总损失 = 预测损失 + λ × 重构损失。
-      训练损失和验证损失口径一致，均使用总损失（预测损失+重构损失）。
-所包含的函数:
-  - train_one_epoch(): 执行一个训练epoch的前向、反向传播与梯度裁剪
-  - validate(): 在验证集上评估模型，计算损失与多维度指标
-  - calculate_metrics(): 根据是否归一化反算真实尺度，返回RMSE/MAE/MAPE/R²及反归一化数组
-  - train_model(): 主训练循环，调度训练/验证，保存最优模型，打印并记录性能
+模型训练与评估流程：单 epoch 训练、验证、指标计算和主训练循环。
+
+支持 'vmd'（(imfs, externals) 双路输入）与 'single'（单路输入）两类模型，
+并预留了端到端 DAE 的重构辅助损失接口。
 """
 
-# ======================== 0. 引入包 =======================
+# ---- 引入依赖 ----
 import torch
 import torch.nn as nn
 import numpy as np
@@ -34,17 +23,9 @@ from configs.config import (
     RANDOM_SEED,                    # 全局随机种子
 )
 
-# ======================== 0.5 全局种子固定 =======================
+# ---- 全局随机种子 ----
 def set_seed(seed: int = RANDOM_SEED):
-    """
-    固定所有随机种子，确保实验可复现。
-
-    设置Python随机种子、NumPy随机种子、PyTorch随机种子，
-    并配置CUDA的确定性模式，消除GPU计算中的不确定性。
-
-    Args:
-        seed (int): 随机种子值，默认为配置文件中的RANDOM_SEED
-    """
+    """固定 Python / NumPy / PyTorch 种子并开启 cuDNN 确定性，保证实验可复现。"""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -55,7 +36,7 @@ def set_seed(seed: int = RANDOM_SEED):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-# ======================== 1. 训练一轮 =======================
+# ---- 训练一个 epoch ----
 def train_one_epoch(
         model: nn.Module,
         train_loader: DataLoader,
@@ -64,23 +45,9 @@ def train_one_epoch(
         device: torch.device,
         model_type: str = 'vmd',
 ):
-    """
-    执行一个完整的训练epoch
+    """跑完一个 epoch：前向、反向、梯度裁剪后更新参数，返回平均训练损失。
 
-    对训练数据集中的所有批次进行前向传播、损失计算、反向传播和参数更新。
-    使用梯度裁剪防止梯度爆炸，确保训练稳定性。
-    支持两种模型类型的forward调用方式。
-
-    Args:
-        model (nn.Module): 待训练的深度学习模型
-        train_loader (DataLoader): 训练数据加载器，提供批次数据
-        optimizer (torch.optim.Optimizer): 优化器实例
-        criterion (nn.Module): 损失函数
-        device (torch.device): 计算设备（CPU或GPU）
-        model_type (str): 模型类型，'vmd' 解包 (imfs, externals, y)，'single' 解包 (x, y)
-
-    Returns:
-        float: 当前epoch的平均训练损失
+    model_type='vmd' 时按 (imfs, externals, y) 解包批次，'single' 时按 (x, y) 解包。
     """
     model.train()
     total_loss = 0.0
@@ -130,7 +97,7 @@ def train_one_epoch(
 
     return total_loss / total_samples
 
-# ======================== 2. 验证 =======================
+# ---- 验证 ----
 def validate(
         model: nn.Module,
         val_loader: DataLoader,
@@ -138,24 +105,7 @@ def validate(
         device: torch.device,
         model_type: str = 'vmd',
 ):
-    """
-    在验证集上评估模型性能
-
-    使用无梯度模式进行推理，计算验证集上的损失值，并收集所有预测结果和真实标签，
-    调用calculate_metrics函数计算多维度评估指标（RMSE、MAE、MAPE）。
-
-    Args:
-        model (nn.Module): 待评估的模型
-        val_loader (DataLoader): 验证数据加载器
-        criterion (nn.Module): 损失函数
-        device (torch.device): 计算设备
-        model_type (str): 模型类型，'vmd' 或 'single'
-
-    Returns:
-        tuple:
-            - float: 验证集上的平均损失值
-            - dict: 包含'RMSE'、'MAE'、'MAPE'三个键的评估指标字典
-    """
+    """无梯度推理整轮验证集，返回平均损失与指标字典（RMSE/MAE/MAPE/R2）。"""
     model.eval()
     total_loss = 0.0
     total_samples = 0
@@ -212,34 +162,16 @@ def validate(
 
     return total_loss / total_samples, metrics
 
-# ======================== 3. 计算指标 =======================
+# ---- 指标计算 ----
 def calculate_metrics(
         y_true: np.ndarray,
         y_pred: np.ndarray,
         is_normalized: bool,
 ):
-    """
-    计算回归预测的多维度评估指标
+    """计算 RMSE / MAE / MAPE / R2，并一并返回反归一化后的真实值与预测值。
 
-    支持归一化数据的反归一化处理，计算RMSE（均方根误差）、MAE（平均绝对误差）、
-    MAPE（平均绝对百分比误差）和R²（决定系数）。
-    对于MAPE，自动排除真实值为0的样本以避免除零错误。
-    反归一化后的真实值和预测值数组也一并返回，供外部直接使用，避免重复反归一化。
-
-    Args:
-        y_true (np.ndarray): 真实标签数组，形状为 (n_samples,)
-        y_pred (np.ndarray): 预测值数组，形状为 (n_samples,)
-        is_normalized (bool): 是否为归一化数据。若为True，则从配置文件加载
-                             归一化参数并还原到原始尺度，同时确保预测值非负
-
-    Returns:
-        dict: 包含评估指标和反归一化后数组的字典
-              - 'RMSE' (float): 均方根误差，对异常值敏感
-              - 'MAE' (float): 平均绝对误差，鲁棒性强
-              - 'MAPE' (float): 平均绝对百分比误差（%），当所有真实值为0时返回NaN
-              - 'R2' (float): 决定系数，衡量模型解释方差的比例
-              - 'y_true_real' (np.ndarray): 反归一化后的真实值数组
-              - 'y_pred_real' (np.ndarray): 反归一化后的预测值数组
+    is_normalized=True 时按 min-max 参数还原尺度，并把预测裁剪回区间内；
+    MAPE 会跳过真实值为 0 的样本。
     """
     if is_normalized:
         minmax_dict = joblib.load(DEMAND_MIN_MAX_SCALER_PATH)
@@ -269,7 +201,7 @@ def calculate_metrics(
         'y_true_real': y_true, 'y_pred_real': y_pred,
     }
 
-# ======================== 4. 主训练循环 =======================
+# ---- 主训练循环 ----
 def train_model(
         model: nn.Module,
         train_loader: DataLoader,
@@ -283,36 +215,9 @@ def train_model(
         early_stopping: bool = None,
         patience: int = None,
 ):
-    """
-    执行完整的模型训练流程
+    """主训练循环：逐 epoch 训练+验证，按验证损失保存最优权重，支持早停。
 
-    整合训练和验证过程，在每个epoch结束后进行验证集评估，打印详细的性能指标。
-    采用最优模型保存策略（基于验证损失），自动保存表现最佳的模型权重。
-    支持VMD分解模型和单路输入模型两种类型。
-    支持端到端DAE训练的辅助重构损失。
-
-    Args:
-        model (nn.Module): 待训练的模型
-        train_loader (DataLoader): 训练数据加载器
-        val_loader (DataLoader): 验证数据加载器
-        epochs (int): 总训练轮数
-        lr (float): 学习率
-        device (torch.device): 计算设备
-        weight_decay (float): L2正则化权重衰减系数，默认1e-5
-        model_type (str): 模型类型，'vmd' 或 'single'，决定forward调用方式
-        save_path (str): 最优模型保存路径，默认使用MODEL_FILE_PATH
-        early_stopping (bool): 是否启用早停，None则使用config默认值
-        patience (int): 早停耐心值，None则使用config默认值
-
-    Returns:
-        list[dict]: 训练记录列表，每个元素为一个字典，包含:
-                   - 'epoch': 轮次编号
-                   - 'train_loss': 训练损失
-                   - 'val_loss': 验证损失
-                   - 'val_rmse': 验证RMSE
-                   - 'val_mae': 验证MAE
-                   - 'val_mape': 验证MAPE
-                   - 'val_r2': 验证R²
+    返回每轮记录，字段为 epoch、train_loss、val_loss、val_rmse、val_mae、val_mape、val_r2。
     """
     if save_path is None:
         save_path = MODEL_FILE_PATH

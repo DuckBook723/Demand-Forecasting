@@ -1,9 +1,8 @@
 """
-文件位置: experiments/ablations/vmd_cat_bilstm_fs_nofs.py
-作用: 消融实验 — 去除特征筛选 (w/o Feature Selection)
-      保留: VMD + CATCN + BiLSTM + GateFusion + PredictionHead + Skip
-      修改: 直接使用24维全特征，跳过 ConsensusFeatureSelector
-      输入: 外部14 + IMF4 + delta_IMF4 + delta_demand + demand = 24维
+消融实验：去掉特征筛选，直接用 24 维全特征训练。
+
+VMD、CATCN、BiLSTM、GateFusion、PredictionHead 与需求跳连都保留。
+输入为外部14 + IMF4 + delta_IMF4 + delta_demand + demand，共 24 维。
 """
 
 import os
@@ -54,7 +53,7 @@ from configs.config import (
 warnings.filterwarnings("ignore")
 
 
-# ==================== 全局随机种子 ====================
+# ---- 全局随机种子 ----
 def seed_everything(seed: int = 42):
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
@@ -94,9 +93,7 @@ os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(DATA_FIGURES_DIR, exist_ok=True)
 
 
-# ========================================================================
-# Part 1: VMD 分解（与主模型完全一致）
-# ========================================================================
+# ---- Part 1: VMD 分解（与主模型一致） ----
 def vmd_decompose(signal, K=VMD_K, alpha=VMD_ALPHA, tau=VMD_TAU,
                   dc=VMD_DC, init=VMD_INIT, tol=VMD_TOL, cache_path=None):
     if cache_path and os.path.exists(cache_path):
@@ -110,9 +107,7 @@ def vmd_decompose(signal, K=VMD_K, alpha=VMD_ALPHA, tau=VMD_TAU,
     return u, u_hat, omega
 
 
-# ========================================================================
-# Part 2: 模型架构（与主模型完全一致）
-# ========================================================================
+# ---- Part 2: 模型架构（与主模型一致） ----
 class CausalConv1d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, dilation=1):
         super().__init__()
@@ -261,8 +256,9 @@ class PredictionHead(nn.Module):
 
 class VMD_CAT_BiLSTM_NoFS(nn.Module):
     """
-    【消融】去除特征筛选，直接使用24维全特征
-    模型结构与主模型完全一致，仅输入维度变为24
+    消融版模型：去掉特征筛选，直接用 24 维全特征。
+
+    结构与主模型一致，只是输入维度固定为 24。
     """
     def __init__(self, input_dim, catcn_hidden=32, catcn_output=16,
                  catcn_layers=2, bilstm_hidden=32, bilstm_layers=1,
@@ -290,13 +286,11 @@ class VMD_CAT_BiLSTM_NoFS(nn.Module):
         return out
 
 
-# ========================================================================
-# Part 3: 数据加载（去除特征筛选，24维全特征）
-# ========================================================================
+# ---- Part 3: 数据加载（无特征筛选，24 维全特征） ----
 def load_vmd_catbilstm_data(seq_len=12, K=VMD_K):
     """
-    【消融】去除特征筛选，直接使用24维全特征：
-      外部14 + IMF1~4 + delta_IMF1~4 + delta_demand + demand
+    去除特征筛选，直接使用 24 维全特征：
+    外部14 + IMF4 + delta_IMF4 + delta_demand + demand。
     """
     print("📂 加载数据（w/o Feature Selection：24维全特征）...")
     df = load_raw_data(SIM_DATASET_PATH)
@@ -362,7 +356,7 @@ def load_vmd_catbilstm_data(seq_len=12, K=VMD_K):
         else:
             X_test_raw = X_seg
 
-    # 【关键修改】跳过特征筛选，直接使用24维全特征
+    # 跳过特征筛选，直接使用 24 维全特征
     print(" ⏭️ 跳过特征筛选，使用24维全特征")
 
     # X 标准化（仅训练集 fit）
@@ -425,9 +419,7 @@ def load_vmd_catbilstm_data(seq_len=12, K=VMD_K):
     }, train_demand, val_demand, test_demand
 
 
-# ========================================================================
-# Part 4: 训练（与主模型完全一致）
-# ========================================================================
+# ---- Part 4: 训练（与主模型一致） ----
 def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda"):
     print(f"\n{'=' * 50}")
     print("🏋️ 开始训练（w/o Feature Selection：24维全特征）")
@@ -515,9 +507,7 @@ def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda
     return model
 
 
-# ========================================================================
-# Part 5: 评估（与主模型完全一致）
-# ========================================================================
+# ---- Part 5: 评估（与主模型一致） ----
 def evaluate_model(model, data_dict, device="cuda"):
     model.eval()
     test_loader = data_dict["test_loader"]
@@ -547,9 +537,7 @@ def evaluate_model(model, data_dict, device="cuda"):
     return preds, trues, metrics
 
 
-# ========================================================================
-# Part 6: 实验主函数
-# ========================================================================
+# ---- Part 6: 实验主函数 ----
 def run_vmd_catbilstm_experiment(epochs=300, patience=30, lr=5e-4,
                                   device="cuda") -> pd.DataFrame:
     seed_everything(RANDOM_SEED)
@@ -637,9 +625,7 @@ def run_vmd_catbilstm_experiment(epochs=300, patience=30, lr=5e-4,
     return results_df
 
 
-# ========================================================================
-# Part 7: 主入口
-# ========================================================================
+# ---- Part 7: 主入口 ----
 if __name__ == "__main__":
     seed_everything(seed=RANDOM_SEED)
     os.makedirs(MODELS_DIR, exist_ok=True)

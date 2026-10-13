@@ -1,21 +1,15 @@
 """
-文件位置: main.py
-作用: 电网物资需求预测项目 —— 多物资一键全量实验调度脚本
-      阶段1: 数据仿真生成 (按物资编码自动切换)
-      阶段2: 主模型 VMD-CAT-BiLSTM-FS
-      阶段3: 消融实验 (4组)
-      阶段4: 对比实验 (5组)
-      阶段5: 汇总所有结果至统一表格
+电网物资需求预测实验的调度入口：按物资编码依次完成数据生成、主模型、
+消融实验与对比实验，最后把所有结果汇总成一张表。
 
-设计原则:
-  1. 本文件不硬编码任何数据文件名或输出路径，全部通过 configs.config 动态获取
-  2. 通过环境变量 MATERIAL_SCENARIO 向子进程传递当前物资编码，驱动 config.py 切换路径
-  3. 支持命令行单物资运行: python main.py MAT002
+运行方式:
+    python main.py            # 处理 MATERIAL_REGISTRY 中注册的全部物资
+    python main.py MAT002     # 只处理指定物资
 
-对接要求 (config.py 需配合):
-  请在 config.py 顶部增加动态切换逻辑，使子进程能根据 MATERIAL_SCENARIO 自动切换：
-  - SIM_DATASET_FILENAME / SIM_DATASET_PATH
-  - DATA_FIGURES_DIR (按物资分子目录，避免结果覆盖)
+物资切换依靠环境变量 MATERIAL_SCENARIO：本脚本拉起子进程时注入该变量，
+子进程导入 config.py 后据此切换数据文件与输出目录。所以 config.py 需要按
+MATERIAL_SCENARIO 动态给出 SIM_DATASET_FILENAME、DATA_FIGURES_DIR 等路径，
+本文件本身不硬编码任何数据文件名或输出路径。
 """
 
 import os
@@ -32,7 +26,7 @@ import numpy as np
 
 warnings.filterwarnings("ignore")
 
-# ========================= 0. 通过 config.py 统一获取所有路径 =========================
+# ---- 通过 config.py 统一获取所有路径 ----
 import configs.config as cfg
 
 # 若本进程已设置 MATERIAL_SCENARIO，重载 config 以应用动态路径
@@ -85,7 +79,7 @@ _SCRIPT_TO_CSV = {
 WINDOWS_FALSE_FAILURE_CODES = {3221226505, 0xC0000409, -1073740791}
 
 
-# ========================= 1. 工具函数 =========================
+# ---- 工具函数 ----
 def print_banner(title, width=70):
     print("\n" + "=" * width)
     print(f" {title}")
@@ -247,7 +241,7 @@ def resolve_status(run_info, metrics):
     return run_info["status"]
 
 
-# ========================= 2. 阶段函数 =========================
+# ---- 阶段函数 ----
 def stage1_generate_data(material_code: str) -> bool:
     """阶段1: 检查并生成指定物资的仿真数据。返回是否成功。"""
     print_banner(f"阶段 1: 数据仿真生成 [{material_code}]")
@@ -413,7 +407,7 @@ def stage5_summary(records, material_code: str):
     return 0
 
 
-# ========================= 3. 主入口 =========================
+# ---- 主入口 ----
 def main():
     total_start = time.time()
     print_banner("电网物资需求预测 —— 多物资一键全量实验流水线", width=80)

@@ -1,7 +1,4 @@
-"""
-文件位置: experiments/baselines/arima_model.py
-作用: ARIMA / SARIMA 对比基线实验 — 输出格式与消融实验对齐版
-"""
+"""ARIMA / SARIMA 对比基线实验，结果输出格式与消融实验保持一致。"""
 
 import os
 import sys
@@ -28,7 +25,7 @@ from configs.config import (
 warnings.filterwarnings("ignore")
 
 
-# ==================== 全局随机种子固定 ====================
+# ---- 全局随机种子 ----
 def seed_everything(seed: int = 42):
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
@@ -38,7 +35,7 @@ def seed_everything(seed: int = 42):
     print(f"   Python hash seed: {os.environ.get('PYTHONHASHSEED')}")
 
 
-# ======================== 1. 数据加载 ========================
+# ---- 数据加载 ----
 def load_arima_data():
     print("📂 加载原始数据...")
     df = load_raw_data(SIM_DATASET_PATH)
@@ -58,7 +55,7 @@ def load_arima_data():
     return train_series, val_series, test_series, train_val_series
 
 
-# ======================== 2. ARIMA 模型类 ========================
+# ---- ARIMA 模型 ----
 class ARIMAModel:
     def __init__(self, order=(1, 1, 1), seasonal=False, m=12, seasonal_order=None):
         self.order = order
@@ -126,7 +123,7 @@ class ARIMAModel:
         return np.array(predictions)
 
 
-# ======================== 3. 评估函数 ========================
+# ---- 评估 ----
 def evaluate_arima(test_series, train_val_series, order=(1, 1, 1), seasonal=False, m=12, seasonal_order=None):
     model = ARIMAModel(order=order, seasonal=seasonal, m=m, seasonal_order=seasonal_order)
     y_pred = model.rolling_forecast(test_series, train_val_series)
@@ -155,7 +152,7 @@ def evaluate_arima(test_series, train_val_series, order=(1, 1, 1), seasonal=Fals
     }
 
 
-# ======================== 4. 实验主函数 ========================
+# ---- 实验主流程 ----
 def run_arima_experiment(mode='manual', order_list=None, seasonal=True, m=12):
     print(f"\n{'=' * 70}")
     print(f"🧪 ARIMA 对比实验 (模式: {mode}, 季节性: {seasonal}, 周期: {m})")
@@ -194,7 +191,7 @@ def run_arima_experiment(mode='manual', order_list=None, seasonal=True, m=12):
     if not all_results:
         return pd.DataFrame()
 
-    # 汇总输出（与消融实验对齐）
+    # 汇总输出，格式与消融实验对齐
     best = max(all_results, key=lambda x: x['R2'])
     print(f"\n{'=' * 50}")
     print("📊 ARIMA 最优测试集结果")
@@ -231,10 +228,18 @@ def run_arima_experiment(mode='manual', order_list=None, seasonal=True, m=12):
     with open(log_path, 'w') as f:
         json.dump(log_data, f, indent=2)
     print(f"📝 实验日志已保存: {log_path}")
+
+    best_result = max(all_results, key=lambda x: x['R2'])
+    pred_csv_path = os.path.join(DATA_FIGURES_DIR, "arima_predictions.csv")
+    pd.DataFrame({
+        "true_demand": best_result['y_true'],
+        "pred_demand": best_result['y_pred'],
+    }).to_csv(pred_csv_path, index=False)
+    print(f"💾 预测曲线数据已保存: {pred_csv_path}")
     return results_df
 
 
-# ======================== 5. 可视化 ========================
+# ---- 可视化 ----
 def plot_arima_forecast(result_dict, save_dir=FIGURES_DIR):
     import matplotlib.pyplot as plt
     os.makedirs(save_dir, exist_ok=True)
@@ -253,7 +258,7 @@ def plot_arima_forecast(result_dict, save_dir=FIGURES_DIR):
     print(f"📈 预测图已保存: {save_path}")
 
 
-# ======================== 6. 主入口 ========================
+# ---- 主入口 ----
 if __name__ == '__main__':
     seed_everything(seed=42)
     results = run_arima_experiment(mode='manual', seasonal=True, m=12, order_list=[(1, 1, 1), (2, 1, 2), (0, 1, 1)])

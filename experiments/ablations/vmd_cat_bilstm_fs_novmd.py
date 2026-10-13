@@ -1,9 +1,8 @@
 """
-文件位置: experiments/ablations/vmd_cat_bilstm_fs_novmd.py
-作用: 消融实验 — 去除 VMD 分解 (w/o VMD)
-      保留: FS + CATCN + BiLSTM + GateFusion + PredictionHead + Skip
-      修改: 输入仅使用外部特征 + 原始需求（无 IMF 分量，无 delta_IMF）
-      基础特征: 外部14 + delta_demand + demand = 16维
+消融实验：去掉 VMD 分解，不使用 IMF 分量。
+
+FS、CATCN、BiLSTM、GateFusion、PredictionHead 与需求跳连都保留。
+输入改为外部14 + delta_demand + demand，共 16 维基础特征。
 """
 
 import os
@@ -46,7 +45,7 @@ from configs.config import (
 warnings.filterwarnings("ignore")
 
 
-# ==================== 全局随机种子 ====================
+# ---- 全局随机种子 ----
 def seed_everything(seed: int = 42):
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
@@ -79,13 +78,11 @@ os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(DATA_FIGURES_DIR, exist_ok=True)
 
 
-# ========================================================================
-# Part 1: 多方法共识特征筛选器（无VMD版本：16维基础特征）
-# ========================================================================
+# ---- Part 1: 多方法共识特征筛选器（无 VMD，16 维基础特征） ----
 class ConsensusFeatureSelector:
     """
-    【消融】去除VMD后，基础特征仅16维：
-      外部14维 + delta_demand + demand
+    与主模型同款筛选器，只是去掉 VMD 后基础特征只有 16 维：
+    外部14 + delta_demand + demand。
     """
     FEATURE_NAMES = [
         'temperature', 'extreme_weather_days', 'wind_speed',
@@ -394,15 +391,11 @@ class ConsensusFeatureSelector:
         print(f" 💾 筛选器已保存: {path}")
 
 
-# ========================================================================
-# Part 2: 数据加载（无VMD：不使用IMF分解）
-# ========================================================================
+# ---- Part 2: 数据加载（无 VMD，不使用 IMF 分解） ----
 def load_vmd_catbilstm_data(seq_len=12, use_feature_selection=True):
     """
-    【消融】去除VMD分解：
-      - 不调用vmd_decompose
-      - 不生成IMF1~4和delta_IMF
-      - 基础特征: 外部14 + delta_demand + demand = 16维
+    去除 VMD 分解：不调用 vmd_decompose，也不生成 IMF1~4 和 delta_IMF。
+    基础特征为 外部14 + delta_demand + demand = 16 维。
     """
     print("📂 加载数据（w/o VMD：无 IMF 分解，仅外部特征+需求）...")
     df = load_raw_data(SIM_DATASET_PATH)
@@ -428,7 +421,7 @@ def load_vmd_catbilstm_data(seq_len=12, use_feature_selection=True):
         d['quarter'] = d.index.quarter
     feature_cols = external_cols + ['month_sin', 'month_cos', 'quarter']
 
-    # 【关键修改】不执行VMD，仅构建外部特征 + 动量 + 需求
+    # 不执行 VMD，只拼接外部特征 + 需求动量 + 当前需求
     def build_features_no_vmd(demand_seg, X_base):
         delta_demand = np.zeros_like(demand_seg)
         delta_demand[1:] = demand_seg[1:] - demand_seg[:-1]
@@ -538,9 +531,7 @@ def load_vmd_catbilstm_data(seq_len=12, use_feature_selection=True):
     }, train_demand, val_demand, test_demand
 
 
-# ========================================================================
-# Part 3: 模型架构（与主模型完全一致）
-# ========================================================================
+# ---- Part 3: 模型架构（与主模型一致） ----
 class CausalConv1d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, dilation=1):
         super().__init__()
@@ -689,8 +680,9 @@ class PredictionHead(nn.Module):
 
 class VMD_CAT_BiLSTM_NoVMD(nn.Module):
     """
-    【消融】去除VMD分解，模型结构完全保留
-    输入维度随特征筛选结果动态调整（约12~16维）
+    消融版模型：去掉 VMD 分解，网络结构不变。
+
+    输入维度随特征筛选结果变化（约 12~16 维）。
     """
     def __init__(self, input_dim, catcn_hidden=32, catcn_output=16,
                  catcn_layers=2, bilstm_hidden=32, bilstm_layers=1,
@@ -718,9 +710,7 @@ class VMD_CAT_BiLSTM_NoVMD(nn.Module):
         return out
 
 
-# ========================================================================
-# Part 4: 训练（与主模型完全一致）
-# ========================================================================
+# ---- Part 4: 训练（与主模型一致） ----
 def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda"):
     print(f"\n{'=' * 50}")
     print("🏋️ 开始训练（w/o VMD：无 IMF 分解）")
@@ -808,9 +798,7 @@ def train_model(model, data_dict, epochs=300, patience=30, lr=5e-4, device="cuda
     return model
 
 
-# ========================================================================
-# Part 5: 评估（与主模型完全一致）
-# ========================================================================
+# ---- Part 5: 评估（与主模型一致） ----
 def evaluate_model(model, data_dict, device="cuda"):
     model.eval()
     test_loader = data_dict["test_loader"]
@@ -840,9 +828,7 @@ def evaluate_model(model, data_dict, device="cuda"):
     return preds, trues, metrics
 
 
-# ========================================================================
-# Part 6: 实验主函数
-# ========================================================================
+# ---- Part 6: 实验主函数 ----
 def run_vmd_catbilstm_experiment(epochs=300, patience=30, lr=5e-4,
                                   device="cuda",
                                   use_feature_selection=True) -> pd.DataFrame:
@@ -935,9 +921,7 @@ def run_vmd_catbilstm_experiment(epochs=300, patience=30, lr=5e-4,
     return results_df
 
 
-# ========================================================================
-# Part 7: 主入口
-# ========================================================================
+# ---- Part 7: 主入口 ----
 if __name__ == "__main__":
     seed_everything(seed=RANDOM_SEED)
     os.makedirs(MODELS_DIR, exist_ok=True)

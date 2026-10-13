@@ -1,21 +1,10 @@
 """
-电网物资需求仿真数据生成引擎 — MAT002 绝缘导线 (周期维护型)
-文件位置: src/data/generate_data_mat002.py
-版本: v6.4 三重不可加性版
+MAT002（绝缘导线，周期维护型）仿真需求数据生成。
 
-核心创新 (vs v6.3):
-  1. 过零点交互: ext × (1 + α·sin + β·cos²)
-     → 峰值时ext放大28%, 过零点时放大18%, 谷值时缩小28%
-     → XGBoost需要5+层分裂
-
-  2. 外部交叉交互: aging × bidding × (1 + γ·sin)
-     → 高老化+高招标+周期峰值 → 需求额外增加
-     → XGBoost需要7+层分裂，211样本下极不稳定
-
-  3. 更白噪声 + 更低AR记忆
-     → 削弱ARIMA和XGBoost对lag特征的依赖
-
-  目标: 主模型R²≈0.88-0.92, 显著超越所有基线
+在低 AR 基线、38 月周期、季节、白噪声等分量之上叠加三类不可加交互：
+外部特征随周期峰谷与过零点调制、老化率×招标强度交叉项、以及周期对交叉项
+的再次调制。这些乘性结构让需求不再是各分量简单相加，ARIMA / XGBoost 也
+难以仅靠 lag 特征拟合。
 """
 
 import os
@@ -25,41 +14,41 @@ from datetime import datetime
 from configs.config import DATA_RAW_DIR, SIM_DATASET_002_PATH
 
 
-# ==================== 全局参数配置 ====================
+# ---- 全局参数配置 ----
 MATERIAL_CODE = "MAT002"
 MATERIAL_NAME = "绝缘导线"
 TARGET_MEAN = 1800
 TARGET_CV = 0.18
 TARGET_STD = TARGET_MEAN * TARGET_CV  # ≈ 324
 
-# --- IMF1: 低AR记忆基线 ---
+# ---- IMF1: 低AR记忆基线 ----
 BASELINE_PHI = 0.88
 BASELINE_SIGMA_EPS = 32
 BASELINE_CLIP_LOW = 1500
 BASELINE_CLIP_HIGH = 2100
 
-# --- IMF2: 38月周期 ---
+# ---- IMF2: 38月周期 ----
 CYCLE_PERIOD = 38
 CYCLE_AMP_RANGE = (300, 400)
 CYCLE_AMP_MODULATION = 0.18
 CYCLE_MODULATION_PERIOD = 120
 PHASE_DRIFT_STD = 0.008
 
-# --- ★ 交互参数 ★ ---
+# ---- 交互参数 ----
 INTERACTION_SIN = 0.28        # 峰谷调制强度
-INTERACTION_COS2 = 0.18       # ★新增：过零点调制强度
-CROSS_EXT_STRENGTH = 0.20     # ★新增：外部×外部交互强度
-CROSS_BY_CYCLE = 0.12         # ★新增：周期调制的外部交叉强度
+INTERACTION_COS2 = 0.18       # 过零点调制强度
+CROSS_EXT_STRENGTH = 0.20     # 外部×外部交互强度
+CROSS_BY_CYCLE = 0.12         # 周期调制的外部交叉强度
 
-# --- IMF3: 季节性 ---
+# ---- IMF3: 季节性 ----
 SEASONAL_ANNUAL_AMP = 42
 SEASONAL_SEMI_AMP = 18
 
-# --- IMF4: 更白噪声 ---
+# ---- IMF4: 更白噪声 ----
 NOISE_AR_PHI = 0.10           # 更接近白噪声
 NOISE_AR_SIGMA = 45           # 更大噪声
 
-# --- 外部特征贡献 ---
+# ---- 外部特征贡献 ----
 EXT_CONTRIBUTION_WEIGHT = 0.55
 
 # 因果敏感度
@@ -84,7 +73,7 @@ OUTLIER_RATIO = 0.003
 OUTLIER_FACTORS = np.array([0.8, 1.3])
 
 
-# ======================== 天气与节假日 ========================
+# ---- 天气与节假日 ----
 
 def simulate_daily_weather(date: datetime, rng: np.random.Generator) -> tuple:
     month = date.month
@@ -111,7 +100,7 @@ def is_chinese_holiday_approx(date: datetime) -> int:
     return 0
 
 
-# ======================== 日度需求仿真 ========================
+# ---- 日度需求仿真 ----
 
 def simulate_daily_demand_steady(dates, daily_feat_map, rng: np.random.Generator):
     yesterday_demand = BASE_DAILY_RATE
@@ -168,7 +157,7 @@ def simulate_daily_demand_steady(dates, daily_feat_map, rng: np.random.Generator
     return pd.DataFrame(records)
 
 
-# ======================== 聚合与特征 ========================
+# ---- 聚合与特征 ----
 
 def aggregate_to_monthly(df_daily):
     df_daily = df_daily.copy()
@@ -244,7 +233,7 @@ def _map_monthly_to_daily(monthly_features_df, daily_dates):
     return daily_feat_map
 
 
-# ======================== 主生成函数 ========================
+# ---- 主生成函数 ----
 
 def generate_mat002_data(start='1995-01-01', end='2025-12-31', freq='ME', seed=42):
     rng = np.random.default_rng(seed)
@@ -275,11 +264,11 @@ def generate_mat002_data(start='1995-01-01', end='2025-12-31', freq='ME', seed=4
     demand_by_month = dict(zip(monthly_total['date'], monthly_total['demand_raw']))
     demand_raw = np.array([demand_by_month.get(d, 0) for d in monthly_dates], dtype=float)
 
-    # ==================== 核心：三重不可加性需求信号 ====================
+    # ---- 需求信号合成：三重不可加性 ----
     t = np.arange(T)
     months = np.array([d.month for d in monthly_dates])
 
-    # --- IMF1: 低AR基线 ---
+    # ---- IMF1: 低AR基线 ----
     baseline = np.zeros(T)
     eps = rng.normal(0, BASELINE_SIGMA_EPS, T)
     baseline[0] = TARGET_MEAN + eps[0]
@@ -288,7 +277,7 @@ def generate_mat002_data(start='1995-01-01', end='2025-12-31', freq='ME', seed=4
                        + (1 - BASELINE_PHI) * TARGET_MEAN + eps[i])
     baseline = np.clip(baseline, BASELINE_CLIP_LOW, BASELINE_CLIP_HIGH)
 
-    # --- IMF2: 38月周期 ---
+    # ---- IMF2: 38月周期 ----
     base_amp = rng.uniform(*CYCLE_AMP_RANGE)
     amp_modulation = 1 + CYCLE_AMP_MODULATION * np.sin(
         2 * np.pi * t / CYCLE_MODULATION_PERIOD)
@@ -296,7 +285,7 @@ def generate_mat002_data(start='1995-01-01', end='2025-12-31', freq='ME', seed=4
     phase_drift = np.cumsum(rng.normal(0, PHASE_DRIFT_STD, T))
     cycle_pure = amp_t * np.sin(2 * np.pi * t / CYCLE_PERIOD + phase_drift)
 
-    # --- 外部特征因果分量 ---
+    # ---- 外部特征因果分量 ----
     ext_contribution = (
         (features_df['macro_invest_growth'].values - 0.06) * 350
         + (features_df['gdp_growth'].values - 0.07) * 250
@@ -306,45 +295,45 @@ def generate_mat002_data(start='1995-01-01', end='2025-12-31', freq='ME', seed=4
         + (features_df['extreme_weather_days'].values - 1) * 8
     ) * EXT_CONTRIBUTION_WEIGHT
 
-    # --- ★ 交互1: 峰谷调制 + 过零点调制 ★ ---
+    # ---- 交互1: 峰谷调制 + 过零点调制 ----
     cycle_sin = np.sin(2 * np.pi * t / CYCLE_PERIOD + phase_drift)
     cycle_cos = np.cos(2 * np.pi * t / CYCLE_PERIOD + phase_drift)
 
-    # 峰谷调制 (v6.3已有)
+    # 峰谷调制
     factor_sin = 1 + INTERACTION_SIN * cycle_sin
 
-    # ★ 过零点调制 (v6.4新增)
+    # 过零点调制
     # 在过零点(sin≈0, |cos|≈1)时，外部因果效果额外放大
     factor_cos2 = 1 + INTERACTION_COS2 * cycle_cos ** 2
 
     # 双重交互
     ext_interacted = ext_contribution * factor_sin * factor_cos2
 
-    # --- ★ 交互2: 外部×外部交叉 ★ ---
+    # ---- 交互2: 外部×外部交叉 ----
     # equipment_aging_rate × bidding_intensity
     # 高老化+高招标 → 替代采购需求额外增加
     aging_norm = features_df['equipment_aging_rate'].values - 0.15
     bidding_norm = features_df['bidding_intensity'].values - 0.3
     cross_ext = CROSS_EXT_STRENGTH * aging_norm * bidding_norm * 500
 
-    # --- ★ 交互3: 周期调制的外部交叉 ★ ---
+    # ---- 交互3: 周期调制的外部交叉 ----
     # 在周期峰值时，交叉交互进一步放大
     cross_by_cycle = cross_ext * (1 + CROSS_BY_CYCLE * cycle_sin)
 
-    # --- 周期信号加入交互调制 ---
+    # ---- 周期信号加入交互调制 ----
     cycle_interacted = cycle_pure + ext_contribution * INTERACTION_SIN * cycle_sin * 0.3
 
-    # --- IMF3: 季节性 ---
+    # ---- IMF3: 季节性 ----
     seasonal = (SEASONAL_ANNUAL_AMP * np.cos(2 * np.pi * (months - 7) / 12)
                 + SEASONAL_SEMI_AMP * np.cos(2 * np.pi * (months - 1) / 6))
 
-    # --- IMF4: 更白噪声 ---
+    # ---- IMF4: 更白噪声 ----
     ar_noise = np.zeros(T)
     for i in range(1, T):
         ar_noise[i] = (NOISE_AR_PHI * ar_noise[i - 1]
                        + (1 - NOISE_AR_PHI) * rng.normal(0, NOISE_AR_SIGMA))
 
-    # --- 合成最终需求 ---
+    # ---- 合成最终需求 ----
     demand = baseline + ext_interacted + cross_by_cycle + cycle_interacted + seasonal + ar_noise
 
     # 日度质感融合
@@ -355,7 +344,7 @@ def generate_mat002_data(start='1995-01-01', end='2025-12-31', freq='ME', seed=4
     demand = np.clip(demand, 800, 3000)
     demand = demand - demand.mean() + TARGET_MEAN
 
-    # ==================== 异常注入 ====================
+    # ---- 异常注入 ----
     df = features_df.copy()
     df['demand'] = demand
 
@@ -374,7 +363,7 @@ def generate_mat002_data(start='1995-01-01', end='2025-12-31', freq='ME', seed=4
         factors = rng.choice(OUTLIER_FACTORS, size=len(out_idx))
         df.loc[df.index[out_idx], 'demand'] *= factors
 
-    # ==================== 诊断 ====================
+    # ---- 诊断 ----
     demand_clean = df['demand'].dropna()
     acf_1 = demand_clean.autocorr(lag=1)
     acf_12 = demand_clean.autocorr(lag=12)

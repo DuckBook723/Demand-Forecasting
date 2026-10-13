@@ -1,20 +1,12 @@
 """
-文件位置: src/data/preprocess.py
-作用: 数据清洗、VMD分解、缺失值插补、异常值缩尾、Min-Max归一化
-所包含的函数:
-  - load_raw_data(): 加载原始仿真数据
-  - clean_data(): 缺失值线性插值 + demand列1%-99%缩尾
-  - perform_vmd_train_only(): 仅对训练集需求序列做VMD分解，避免信息泄露
-  - apply_vmd_to_subset(): 将训练集的IMF分解结果推广到验证/测试集
-  - split_by_time(): 严格按时间顺序 70/10/20 划分
-  - normalize_and_save(): 训练集拟合MinMaxScaler，统一转换三路数据并保存
-是否需要创建: 是，本文件需要创建
-相关文件更新:
-  - 读取 data/raw/grid_material_demand_sim.csv
-  - 输出 data/processed/{train,val,test}.csv, scaler.pkl
+数据预处理：清洗原始仿真数据、VMD 分解、缺失值插补、异常值缩尾、Min-Max 归一化。
+
+顺序是"先按时间划分，再清洗和分解"：缩尾分位数和 VMD 分解都只在训练集上拟合，
+验证/测试集复用训练集统计量（VMD 用 AR 模型外推到后续时间），避免信息泄露。
+输出 data/processed 下的 train/val/test.csv 与归一化缩放器文件。
 """
 
-# ======================== 0. 引入包 =======================
+# ---- 引入包 ----
 import os
 import sys
 import numpy as np
@@ -41,37 +33,20 @@ from configs.config import (
     DEMAND_MIN_MAX_SCALER_PATH,     # 需求列Min-Max归一化缩放器保存路径
 )
 
-# ======================== 1. 加载原始仿真数据 =======================
+# ---- 加载原始仿真数据 ----
 def load_raw_data(path: str) -> pd.DataFrame:
     """
-    加载原始仿真数据并返回按日期排序的DataFrame。
-
-    从指定的CSV文件路径读取数据，自动将'date'列解析为日期类型并设置为索引，
-    最后按时间顺序排序返回。
-
-    Args:
-        path (str): CSV文件的路径，默认为配置中的SIM_DATASET_PATH。
-
-    Returns:
-        pd.DataFrame: 包含原始仿真数据的DataFrame，索引为排序后的日期。
+    读取 CSV（date 解析为日期并作索引），按时间升序返回。
     """
     df = pd.read_csv(path, parse_dates=['date'], index_col='date')
     return df.sort_index()
 
-# ====================== 2. 缺失值插补 + demand列1%-99%缩尾 ======================
+# ---- 缺失值插补 + demand列1%-99%缩尾 ----
 def clean_data_train(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """
-    对训练集数据进行清洗，并返回统计量供验证/测试集使用（避免信息泄漏）。
+    清洗训练集：缺失值前向填充 + 训练集内部的线性插值，数值列按 1%/99% 分位缩尾。
 
-    仅使用训练集自身数据计算缩尾分位数和统计量，确保无未来信息泄漏。
-    缺失值使用前向填充（仅用过去数据）+ 线性插值（仅在训练集内部）。
-
-    Args:
-        df (pd.DataFrame): 训练集DataFrame数据。
-
-    Returns:
-        tuple: (清洗后的DataFrame, 统计量字典)
-            统计量字典包含每列的缩尾上下界，供clean_data_with_stats使用。
+    缩尾边界只从训练集自身计算，返回的统计量供验证/测试集复用，避免信息泄漏。
     """
     df_clean = df.copy()
 
@@ -92,17 +67,8 @@ def clean_data_train(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
 
 def clean_data_with_stats(df: pd.DataFrame, stats: dict) -> pd.DataFrame:
     """
-    使用训练集的统计量对验证/测试集进行清洗（无信息泄漏）。
-
-    使用前向填充（仅依赖过去数据）+ 训练集的缩尾分位数边界，
-    确保验证/测试集不使用任何自身统计量或未来信息。
-
-    Args:
-        df (pd.DataFrame): 验证/测试集DataFrame数据。
-        stats (dict): 训练集返回的统计量字典，包含clip_bounds。
-
-    Returns:
-        pd.DataFrame: 清洗后的DataFrame。
+    用训练集的统计量清洗验证/测试集：前向填充；首行仍缺失时用训练集缩尾边界的中值填充，
+    最后按训练集缩尾边界裁剪，全程不使用验证/测试集自身的统计量。
     """
     df_clean = df.copy()
 
@@ -126,34 +92,17 @@ def clean_data_with_stats(df: pd.DataFrame, stats: dict) -> pd.DataFrame:
 
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     """
-    对数据进行清洗（兼容旧接口，仍可在非严格场景使用）。
-
-    注意：此函数对全量数据计算分位数，存在信息泄漏风险。
-    推荐使用 clean_data_train() + clean_data_with_stats() 替代。
-
-    Args:
-        df (pd.DataFrame): 待清洗的DataFrame数据。
-
-    Returns:
-        pd.DataFrame: 经过缺失值插补和异常值缩尾处理后的DataFrame。
+    旧的清洗接口，对全量数据统一计算分位数，存在信息泄漏风险。
+    新代码请用 clean_data_train() + clean_data_with_stats()。
     """
     df_clean, _ = clean_data_train(df)
     return df_clean
 
-# ====================== 3. 仅对训练集需求序列做VMD分解 ======================
+# ---- 仅对训练集需求序列做VMD分解 ----
 def perform_vmd_train_only(train_demand: np.ndarray) -> tuple[np.ndarray, dict]:
     """
-    仅对训练集的需求序列进行VMD分解，避免信息泄露。
-    VMD分解只使用训练集数据拟合，返回的IMF分量和VMD参数供后续
-    对验证/测试集进行外推处理。
-
-    Args:
-        train_demand (np.ndarray): 训练集需求序列，形状 (n_train,)
-
-    Returns:
-        tuple:
-            - imfs_train (np.ndarray): 讓练集的IMF分量，形状 (K, n_train)
-            - vmd_info (dict): VMD分解的元信息，包含中心频率等，供外推参考
+    只对训练集需求序列做 VMD，返回 IMF 分量 (K, n_train) 和分解信息
+    （中心频率、频域表示等），供验证/测试集外推时参考。
     """
     n_input = len(train_demand)
 
@@ -163,7 +112,7 @@ def perform_vmd_train_only(train_demand: np.ndarray) -> tuple[np.ndarray, dict]:
         DC=VMD_DC, init=VMD_INIT, tol=VMD_TOL
     )
 
-    # ========== 新增：长度校验与对齐 ==========
+    # ---- 长度校验与对齐 ----
     # vmdpy 在某些参数组合下（如 tau=0）可能返回比输入短1的IMF
     # 需要检查并补齐，确保 IMF 长度与输入信号一致
     n_output = u.shape[1]
@@ -184,7 +133,6 @@ def perform_vmd_train_only(train_demand: np.ndarray) -> tuple[np.ndarray, dict]:
         # 截断多余部分（理论上不应出现）
         u = u[:, :n_input]
         print(f"  ⚠️ VMD输出长度({n_output}) > 输入长度({n_input})，已截断")
-    # ========== 长度校验结束 ==========
 
     vmd_info = {
         'omega': omega,  # 中心频率

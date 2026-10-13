@@ -1,7 +1,4 @@
-"""
-文件位置: experiments/baselines/lstm_fair_model.py
-作用: 与 XGBoost 特征平等的 LSTM/BiLSTM — 优化版（精简特征 + 提升容量）
-"""
+"""LSTM / BiLSTM 公平对比基线，使用与 XGBoost 相同的特征子集。"""
 
 import os
 import random
@@ -25,7 +22,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-# ==================== 0. 全局随机种子固定 ====================
+# ---- 全局随机种子 ----
 def seed_everything(seed: int = 42):
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
@@ -45,8 +42,8 @@ def seed_everything(seed: int = 42):
         print(f"   GPU: {torch.cuda.get_device_name(0)}")
 
 
-# ==================== 核心特征子集（精简至 ~20 维）====================
-# 基于 XGBoost 特征重要性，仅保留对月度需求预测最关键的特征
+# ---- 核心特征子集（约 20 维）----
+# 依据 XGBoost 特征重要性，只保留对月度需求预测最关键的特征
 CORE_FEATURES = [
     # 原始外部特征（11 维）
     'temperature', 'extreme_weather_days', 'wind_speed',
@@ -68,7 +65,7 @@ CORE_FEATURES = [
 ]
 
 
-# ==================== 1. 公平数据加载（精简特征 + 修复 NaN）====================
+# ---- 数据加载 ----
 def load_fair_baseline_data(seq_len=12, use_feature_selection=True, importance_threshold=0.01):
     print("📂 加载数据（LSTM/BiLSTM 公平对比版 — 精简特征与 XGBoost 对齐）...")
     df = load_raw_data(SIM_DATASET_PATH)
@@ -101,23 +98,23 @@ def load_fair_baseline_data(seq_len=12, use_feature_selection=True, importance_t
             common_cols = [c for c in all_cols if c in top_features]
             print(f"   ✅ 基于 XGBoost 重要性筛选，保留 {len(common_cols)} 个特征")
         else:
-            # 【关键优化】未找到重要性文件时，使用预定义核心特征子集，而非全部 55 维
+            # 未找到重要性文件时退回预定义核心特征子集，避免使用全部 55 维
             common_cols = [c for c in all_cols if c in CORE_FEATURES]
             print(f"   ⚠️ 未找到特征重要性文件，使用预定义核心特征子集（{len(common_cols)} 维）")
     else:
         common_cols = all_cols
         print(f"   ℹ️ 使用全部特征（{len(common_cols)} 维）")
 
-    # 断言：确保核心特征至少有一部分存在
+    # 核心特征至少要有一部分存在
     if len(common_cols) == 0:
         raise ValueError("❌ 特征交集为空，请检查 CORE_FEATURES 与 build_features 输出是否匹配")
 
-    # 【修复】直接对 DataFrame 赋值，确保 dropna 生效
+    # 先按列筛选再 dropna，去掉滞后特征带来的空值
     train_feat = train_feat[common_cols + ['target']].dropna()
     val_feat = val_feat[common_cols + ['target']].dropna()
     test_feat = test_feat[common_cols + ['target']].dropna()
 
-    # 断言：确保无 NaN
+    # 确认没有残留 NaN
     for name, feat_df in [("train", train_feat), ("val", val_feat), ("test", test_feat)]:
         if feat_df.isnull().any().any():
             raise ValueError(f"❌ {name}_feat 仍存在 NaN")
@@ -141,7 +138,7 @@ def load_fair_baseline_data(seq_len=12, use_feature_selection=True, importance_t
     print(f"   特征维度: {len(common_cols)} (精简后与 XGBoost 核心特征对齐)")
     print(f"   训练样本: {len(train_feat)} | 验证: {len(val_feat)} | 测试: {len(test_feat)}")
 
-    # 严格时序：在每个集合内部独立构造滑动窗口
+    # 各集合内部独立构造滑动窗口，避免跨集合取到未来信息
     def create_seq(X, y, seq_len):
         Xs, ys = [], []
         for i in range(len(X) - seq_len):
@@ -182,7 +179,7 @@ def load_fair_baseline_data(seq_len=12, use_feature_selection=True, importance_t
     }
 
 
-# ==================== 2. 模型定义（提升容量 + 适度正则化）====================
+# ---- 模型定义 ----
 class FairLSTM(nn.Module):
     def __init__(self, input_dim, hidden_dim=48, num_layers=2, dropout=0.3):
         super().__init__()
@@ -224,7 +221,7 @@ class FairBiLSTM(nn.Module):
         return self.fc(out).squeeze(-1)
 
 
-# ==================== 3. 训练与评估（优化超参）====================
+# ---- 训练与评估 ----
 def train_and_eval(model_class, model_name, data_dict, epochs=300, lr=1e-3, patience=30, device='cuda'):
     device = torch.device(device if torch.cuda.is_available() else 'cpu')
     model = model_class(input_dim=data_dict["input_dim"]).to(device)
@@ -317,7 +314,12 @@ def train_and_eval(model_class, model_name, data_dict, epochs=300, lr=1e-3, pati
     preds_real = np.maximum(preds_real, 0)
 
     metrics = calculate_metrics(trues_real, preds_real, is_normalized=False)
-
+    pred_csv_path = os.path.join(DATA_FIGURES_DIR, f"{model_name.lower()}_predictions.csv")
+    pd.DataFrame({
+        "true_demand": trues_real.flatten(),
+        "pred_demand": preds_real.flatten(),
+    }).to_csv(pred_csv_path, index=False)
+    print(f"💾 预测曲线数据已保存: {pred_csv_path}")
     print(f"\n{'=' * 50}")
     print(f"📊 {model_name} 测试集结果")
     print(f"{'=' * 50}")
@@ -336,7 +338,7 @@ def train_and_eval(model_class, model_name, data_dict, epochs=300, lr=1e-3, pati
     return metrics, n_params
 
 
-# ==================== 4. 主函数 ====================
+# ---- 主函数 ----
 def run_fair_experiment():
     seed_everything(seed=RANDOM_SEED)
     print("\n" + "=" * 70)

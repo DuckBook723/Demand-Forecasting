@@ -1,15 +1,9 @@
 """
-电网物资需求仿真数据生成引擎
+MAT001（变压器，项目型）仿真需求数据生成：只模拟一种物资、单一区域 A 的总需求序列。
 
-核心改动：
-1. 只模拟一种物资（变压器，项目型）和一个区域（A），生成总需求序列
-2. 去除物资循环、区域循环、BOM联动等多维度聚合逻辑
-3. 保持日度仿真→月度聚合的基本结构，确保业务真实性
-4. 后处理增强保证需求范围合理（均值~4000）且特征相关性显著
-5. 输出格式：仅包含 date, demand 和 11个外部特征，无任何分类列
-
-输出文件：
-    grid_material_demand_sim.csv : 月度需求 + 外部特征
+日度仿真再聚合成月度，最后做后处理，使需求均值落在 4000 附近、外部特征与需求
+的相关性足够明显。输出 grid_material_demand_sim.csv，只含 date、demand 和 11 个
+外部特征，不含分类列（物资循环、区域循环、BOM 联动等聚合逻辑都已去掉）。
 """
 
 import os
@@ -22,7 +16,7 @@ from configs.config import (
     DATA_RAW_DIR,
 )
 
-# ==================== 全局参数配置 ====================
+# ---- 全局参数配置 ----
 RANDOM_SEED = 42
 
 # 固定物资和区域
@@ -77,7 +71,7 @@ SEASONAL_AMPLITUDE = 200
 TARGET_MEAN = 4000
 
 
-# ======================== 天气与节假日 ========================
+# ---- 天气与节假日 ----
 def simulate_daily_weather(date: datetime) -> tuple:
     month = date.month
     if month in [12, 1, 2]:
@@ -106,7 +100,7 @@ def is_chinese_holiday_approx(date: datetime) -> int:
     return 0
 
 
-# ======================== 项目生成 ========================
+# ---- 项目生成 ----
 def generate_projects_with_trend(years, base_projects_per_year, growth_rate):
     """生成项目清单，仅针对固定物资和区域"""
     projects = []
@@ -130,7 +124,7 @@ def generate_projects_with_trend(years, base_projects_per_year, growth_rate):
     return projects
 
 
-# ======================== 日度需求仿真 ========================
+# ---- 日度需求仿真 ----
 def simulate_daily_demand(dates, projects, daily_feat_map):
     """仿真单一物资在固定区域的日度需求"""
     yesterday_demand = 0
@@ -216,7 +210,7 @@ def simulate_daily_demand(dates, projects, daily_feat_map):
     return pd.DataFrame(records)
 
 
-# ======================== 聚合与外部特征 ========================
+# ---- 聚合与外部特征 ----
 def aggregate_to_monthly(df_daily):
     df_daily['year_month'] = df_daily['date'].dt.to_period('M')
     monthly_total = df_daily.groupby('year_month')['demand_qty'].sum().reset_index()
@@ -278,7 +272,7 @@ def _map_monthly_to_daily(monthly_features_df, daily_dates):
     return daily_feat_map
 
 
-# ======================== 主生成函数 ========================
+# ---- 主生成函数 ----
 def generate_grid_material_demand(
         start='1995-01-01', end='2025-12-31', freq='ME',
         seed=42, add_missing=True, add_outliers=True,
@@ -319,7 +313,7 @@ def generate_grid_material_demand(
     demand_by_month = dict(zip(monthly_total['date'], monthly_total['demand_raw']))
     demand_raw = np.array([demand_by_month.get(d, 0) for d in monthly_dates], dtype=float)
 
-    # ========== 后处理增强（优化季节与相关性）==========
+    # ---- 后处理增强（调整季节与相关性）----
     t = np.arange(T)
     months = np.array([d.month for d in monthly_dates])
 
@@ -337,7 +331,7 @@ def generate_grid_material_demand(
 
     external_contribution = (
             (macro - 0.06) * 1500  # 增强宏观投资影响
-            + (gdp - 0.07) * 1200  # 显著增强 GDP 贡献
+            + (gdp - 0.07) * 1200  # 增强 GDP 贡献
             + (temp - 12) * 12
             + (bidding - 0.2) * 800  # 增强招标强度影响
     )
